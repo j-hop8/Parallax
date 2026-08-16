@@ -17,6 +17,23 @@ log = logging.getLogger(__name__)
 _STALE_AFTER = timedelta(days=4)
 
 
+class PartialFetchError(RuntimeError):
+    """Some of an outlet's feeds failed while others succeeded.
+
+    Carries the stubs that *did* arrive so the caller can still store them --
+    they are real articles and unrecoverable if dropped -- while recording the
+    run as degraded. A partial run must never count as healthy: if 11 of 中央社's
+    12 sections fail, the surviving one still yields articles, and silently
+    calling that a good crawl would let a day missing ~90% of its output be
+    marked complete and used as a coverage-weight denominator.
+    """
+
+    def __init__(self, stubs: list[ArticleStub], errors: list[str], total: int) -> None:
+        super().__init__(f"{len(errors)}/{total} feeds failed: {'; '.join(errors)}")
+        self.stubs = stubs
+        self.errors = errors
+
+
 class ListingAdapter(Protocol):
     """Tier-1 contract: return the outlet's current listing as metadata stubs.
 
@@ -101,9 +118,10 @@ class RSSAdapter:
         if stale:
             log.warning("%s: stale feed(s), consider dropping: %s", self.code, "; ".join(stale))
 
-        # Every section failing is a real breakage, not a quiet news cycle.
-        if errors and not stubs:
-            raise RuntimeError(f"all {len(self.config.feed_urls)} feeds failed: {'; '.join(errors)}")
+        # ANY section failing degrades the day's coverage, not just all of them.
+        # The caller stores what arrived and marks the run not-ok.
+        if errors:
+            raise PartialFetchError(stubs, errors, len(self.config.feed_urls))
         return stubs
 
 

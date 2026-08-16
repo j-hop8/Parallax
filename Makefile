@@ -41,8 +41,24 @@ db.wait:
 		sleep 2; \
 	done; echo "timed out waiting for postgres" >&2; exit 1
 
+# schema.sql is CREATE TABLE IF NOT EXISTS, so on an EXISTING database it adds
+# nothing -- new columns arrive only through db/migrations/. Running the schema
+# alone left such a database without outlet_daily_totals.complete, and the rollup
+# then failed on a column that appeared to exist in the committed schema.
+# Migrations are applied in filename order after it; each must be idempotent.
+# SQL is piped over stdin rather than read from a bind mount. Docker Desktop on
+# macOS silently presents an unshared bind path as an EMPTY directory instead of
+# failing, so `-f /schema/schema.sql` died with "No such file or directory" even
+# though `docker inspect` showed the mount. stdin depends on nothing but the host
+# filesystem.
 db.migrate: db.wait
-	$(PSQL) -v ON_ERROR_STOP=1 -f /schema/schema.sql
+	@echo "applying db/schema.sql"
+	@$(PSQL) -v ON_ERROR_STOP=1 -q < db/schema.sql
+	@for f in $$(ls db/migrations/*.sql 2>/dev/null | sort); do \
+		echo "applying $$f"; \
+		$(PSQL) -v ON_ERROR_STOP=1 -q < "$$f" || exit 1; \
+	done
+	@echo "schema + migrations applied"
 
 db.psql:
 	$(DC) exec -it db psql -U parallax -d parallax

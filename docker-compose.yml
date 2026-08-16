@@ -21,9 +21,10 @@ services:
       - "5433:5432"   # 5433 on the host, so a future local Postgres cannot clash
     volumes:
       - parallax_pgdata:/var/lib/postgresql/data
-      # Mounted read-only so `make db.migrate` can apply it from inside the
-      # container without a psql client installed on the host.
-      - ./db:/schema:ro
+      # No bind mount for db/: Docker Desktop on macOS silently presents an
+      # unshared bind path as an empty directory rather than erroring, which made
+      # `psql -f /schema/schema.sql` fail while `docker inspect` still showed the
+      # mount. `make db.migrate` pipes the SQL over stdin instead.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U parallax -d parallax"]
       interval: 5s

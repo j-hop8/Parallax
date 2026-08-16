@@ -21,14 +21,21 @@ WITH counts AS (
     GROUP BY 1, 2
 ),
 -- Successful runs, in Taipei local time, with the gap since the previous one.
+--
+-- Partitioned by outlet ONLY, never by day. Partitioning by day resets lag() at
+-- every midnight, so the first run of a day has a NULL gap and an outage that
+-- straddles midnight -- 23:40 to 01:20, say -- becomes invisible to both days:
+-- the gap never exists in either partition, while each day still passes its
+-- first/last-run bracket checks. Both days would then be marked complete despite
+-- a 100-minute hole. Spanning the partition across midnight attributes that gap
+-- to the day of the run that ends it, which is the day whose coverage is short.
 runs AS (
     SELECT outlet,
            (started_at AT TIME ZONE 'Asia/Taipei') AS ts,
            (started_at AT TIME ZONE 'Asia/Taipei')::date AS day,
            (started_at AT TIME ZONE 'Asia/Taipei')
              - lag(started_at AT TIME ZONE 'Asia/Taipei')
-               OVER (PARTITION BY outlet, (started_at AT TIME ZONE 'Asia/Taipei')::date
-                     ORDER BY started_at) AS gap
+               OVER (PARTITION BY outlet ORDER BY started_at) AS gap
     FROM crawl_runs
     WHERE ok
 ),

@@ -31,8 +31,15 @@ not rewrite the file, so its comments survive).
 - Any outlet whose `robots.txt` disallows our path is either dropped and replaced
   **this week** (changing the list later resets the daily-totals baseline) or
   escalated to the human. Do not crawl a disallowed path.
-- `load_outlets()` raises `UnverifiedOutletError` for anything left unverified —
-  confirm this actually fires.
+- Verification is enforced **per request, not at load time**. `load_outlets()`
+  returns every outlet, verified or not; refusing to load the file because one
+  outlet lacks an adapter would stop the other seven from crawling, and tier-1
+  data missed during that outage cannot be recovered.
+  - A bulk crawl **skips** unverified outlets and logs a warning.
+  - Naming one explicitly (`make crawl.one OUTLET=setn`) raises
+    `UnverifiedOutletError` — there, a silent skip is indistinguishable from a
+    successful crawl of an outlet that is in fact uncollected.
+  - Covered by `tests/test_crawl_health.py::test_naming_an_unverified_outlet_raises_rather_than_skipping`.
 
 ## Verify
 
