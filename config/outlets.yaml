@@ -1,0 +1,138 @@
+# The eight outlets, fixed from Design.pdf. Changing this list later resets the
+# outlet_daily_totals baseline, so it is settled in week 1 and then left alone.
+#
+# Audited 2026-08-16 via scripts/audit_feeds.py + scripts/probe_feeds.py.
+# Result: 4 outlets publish usable RSS, 4 publish none and need HTML listing
+# parsers. No outlet's robots.txt disallows our path.
+#
+# WHY feed_urls IS A LIST: neither CNA nor UDN offers a whole-site feed, only
+# per-section ones capped at 20 items. Coverage weight (Q2) divides incident
+# articles by the outlet's TOTAL daily output, so crawling a single section
+# would shrink the denominator and overstate that outlet's priority. Every
+# section we can reach is therefore polled, and duplicates across sections are
+# collapsed on canonical URL.
+
+defaults:
+  rate_limit_seconds: 2.0        # per-outlet token bucket; deliberately conservative
+  user_agent: "ParallaxResearchBot/0.1 (media-coverage research; contact: j8211080@gmail.com)"
+  timeout_seconds: 20
+
+outlets:
+  # ---------------------------------------------------------------- RSS ----
+  - code: cna
+    name_zh: 中央社
+    home_url: https://www.cna.com.tw/
+    parser: rss
+    robots_ok: true
+    has_dates: true
+    verified: true
+    feed_urls:
+      - https://feeds.feedburner.com/rsscna/politics
+      - https://feeds.feedburner.com/rsscna/social
+      - https://feeds.feedburner.com/rsscna/intworld
+      - https://feeds.feedburner.com/rsscna/finance
+      - https://feeds.feedburner.com/rsscna/lifehealth
+      - https://feeds.feedburner.com/rsscna/culture
+      - https://feeds.feedburner.com/rsscna/sport
+      - https://feeds.feedburner.com/rsscna/local
+      - https://feeds.feedburner.com/rsscna/mainland
+      - https://feeds.feedburner.com/rsscna/technology
+      - https://feeds.feedburner.com/rsscna/stars
+      # DROPPED rsscna/health: dead feed, frozen at 2020-04-23. It returns 20
+      # well-formed COVID-era items on every poll, which would land in
+      # outlet_daily_totals as a fake 2020 day and skew CNA's output history.
+      # The live rsscna/lifehealth feed covers health anyway.
+
+  - code: ltn
+    name_zh: 自由時報
+    home_url: https://news.ltn.com.tw/
+    parser: rss
+    robots_ok: true
+    has_dates: true
+    verified: true
+    feed_urls:
+      # The only whole-site feed found across all eight outlets. 40 items.
+      - https://news.ltn.com.tw/rss/all.xml
+
+  - code: ettoday
+    name_zh: ETtoday
+    home_url: https://www.ettoday.net/
+    parser: rss
+    robots_ok: true
+    # NOTE: this feed carries NO publish timestamps. effective_at falls back to
+    # seen_at, which is only as precise as the 20-minute poll interval -- too
+    # coarse to place ETtoday in a propagation chain (Q3). T-005 must recover a
+    # real timestamp from the article page (JSON-LD datePublished / <time>)
+    # during body fetch, or ETtoday's ordering stays untrustworthy.
+    has_dates: false
+    verified: true
+    feed_urls:
+      - https://feeds.feedburner.com/ettoday/realtime
+
+  # ------------------------------------------------- HTML listing needed ----
+  # No usable RSS. These use article-URL patterns rather than CSS selectors:
+  # markup changes constantly and fails silently, URL shape rarely does, and a
+  # pattern catches every layout on the page (carousel, list, sidebar) which
+  # matters because this listing is the coverage-weight denominator.
+  - code: udn
+    name_zh: 聯合報
+    home_url: https://udn.com/news/index
+    parser: pattern
+    robots_ok: true
+    has_dates: false
+    verified: true
+    listing_url: https://udn.com/news/breaknews/1
+    article_url_pattern: '/news/story/\d+/\d+'
+    strip_trailing_time: true
+    # UDN's RSS endpoints respond 200 with 20 well-formed <item> elements, but
+    # every one is a hollow shell: empty <title>, empty <link>, pubDate of
+    # 1970-01-01. Verified across all 11 channel ids on 2026-08-16.
+
+  - code: chinatimes
+    name_zh: 中國時報
+    home_url: https://www.chinatimes.com/
+    parser: pattern
+    robots_ok: true
+    has_dates: false
+    verified: true
+    listing_url: https://www.chinatimes.com/realtimenews/
+    article_url_pattern: '/realtimenews/\d{8,}'
+
+  - code: setn
+    name_zh: 三立新聞
+    home_url: https://www.setn.com/
+    parser: pattern
+    robots_ok: true
+    has_dates: false
+    verified: true
+    listing_url: https://www.setn.com/ViewAll.aspx
+    # Restricted to www: star./health./inews. are separate sub-brands and mixing
+    # them in would inflate 三立's denominator against the other outlets.
+    article_url_pattern: '^(https://www\.setn\.com)?/news/\d+'
+    # Its JSON-LD reads "2026-08-16 12:54 +00:00" but the clock is Taipei local;
+    # believing the offset dates every article 8 hours into the future.
+    timestamp_offset_is_wrong: true
+
+  - code: tvbs
+    name_zh: TVBS新聞網
+    home_url: https://news.tvbs.com.tw/
+    parser: tvbs
+    robots_ok: true
+    # The only non-RSS outlet with real timestamps: the listing is rendered
+    # client-side, but the RealTimeList Astro island's props carry publishedAt
+    # as a Unix timestamp.
+    has_dates: true
+    verified: true
+    listing_url: https://news.tvbs.com.tw/realtime
+
+  - code: ftv
+    name_zh: 民視新聞
+    home_url: https://www.ftvnews.com.tw/
+    parser: pattern
+    robots_ok: true
+    # Listing prints a full datetime ahead of each headline, parsed out below.
+    has_dates: true
+    verified: true
+    listing_url: https://www.ftvnews.com.tw/realtime/
+    article_url_pattern: '/news/detail/\w+'
+    title_datetime_pattern: '^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})'
