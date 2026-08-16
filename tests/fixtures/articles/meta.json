@@ -1,0 +1,34 @@
+{
+  "chinatimes": {
+    "url": "https://www.chinatimes.com/realtimenews/20260816001825-260407",
+    "seen_at": "2026-08-16T06:40:29.644164+00:00"
+  },
+  "cna": {
+    "url": "https://www.cna.com.tw/news/asoc/202608160097.aspx",
+    "seen_at": "2026-08-16T06:20:28.032842+00:00"
+  },
+  "ettoday": {
+    "url": "https://discovery.ettoday.net/news/3212163",
+    "seen_at": "2026-08-16T06:08:42.442111+00:00"
+  },
+  "ftv": {
+    "url": "https://www.ftvnews.com.tw/news/detail/2026816W0303",
+    "seen_at": "2026-08-16T06:40:31.667015+00:00"
+  },
+  "ltn": {
+    "url": "https://auto.ltn.com.tw/news/32622",
+    "seen_at": "2026-08-16T06:40:28.310102+00:00"
+  },
+  "setn": {
+    "url": "https://www.setn.com/news/1890339",
+    "seen_at": "2026-08-16T06:40:30.779479+00:00"
+  },
+  "tvbs": {
+    "url": "https://news.tvbs.com.tw/world/4007975",
+    "seen_at": "2026-08-16T06:40:31.335209+00:00"
+  },
+  "udn": {
+    "url": "https://udn.com/news/story/6656/9694443?from=udn-ch1_breaknews-1-0-news",
+    "seen_at": "2026-08-16T06:40:29.438600+00:00"
+  }
+}
