@@ -116,7 +116,8 @@ sched.install:
 	@if crontab -l > /tmp/parallax-crontab.current 2>/dev/null; then \
 		if grep -q 'parallax.jobs' /tmp/parallax-crontab.current; then \
 			cp /tmp/parallax-crontab.current $$HOME/.parallax-crontab.backup; \
-			grep -v 'parallax.jobs' /tmp/parallax-crontab.current | crontab -; \
+			grep -v -e 'parallax.jobs' -e 'Parallax tier-1' -e 'permanently unrecoverable' \
+				-e 'Daily totals (Asia/Taipei' /tmp/parallax-crontab.current | crontab -; \
 			echo "removed parallax cron entries (backup: ~/.parallax-crontab.backup)"; \
 		else \
 			echo "no parallax cron entries present; crontab left untouched"; \
