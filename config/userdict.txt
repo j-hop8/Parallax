@@ -1,0 +1,84 @@
+# jieba user dictionary: terms the general dictionary splits wrongly.
+# Format: <term> <frequency> <pos>. Higher frequency wins against a split.
+#
+# Wrong splits degrade two things at once: keyword search (a query segmented
+# differently from the indexed text simply will not match) and SimHash dedup
+# (token sets diverge between near-identical articles). Add terms here whenever
+# you see one broken in the wild.
+
+# --- the eight outlets ---
+中央社 1000 nz
+自由時報 1000 nz
+聯合報 1000 nz
+中國時報 1000 nz
+三立新聞 1000 nz
+TVBS新聞網 1000 nz
+民視新聞 1000 nz
+東森新聞 1000 nz
+
+# --- government bodies (observed split: 衛生福利部 -> 衛生 / 福利部) ---
+衛生福利部 1000 nt
+衛福部 1000 nt
+內政部 1000 nt
+勞動部 1000 nt
+教育部 1000 nt
+法務部 1000 nt
+外交部 1000 nt
+國防部 1000 nt
+財政部 1000 nt
+經濟部 1000 nt
+交通部 1000 nt
+行政院 1000 nt
+立法院 1000 nt
+監察院 1000 nt
+司法院 1000 nt
+考試院 1000 nt
+總統府 1000 nt
+中央流行疫情指揮中心 1000 nt
+
+# --- domain terms (observed split: 長照 -> 長 / 照) ---
+長照 1000 n
+長照機構 1000 n
+社會局 1000 nt
+衛生局 1000 nt
+地檢署 1000 nt
+看護工 1000 n
+外籍看護 1000 n
+移工 1000 n
+家暴 1000 n
+性騷擾 1000 n
+偵辦 1000 v
+起訴 1000 v
+不起訴 1000 v
+交保 1000 v
+函送 1000 v
+傷害罪 1000 n
+過失致死 1000 n
+
+# --- Taiwan geography commonly split ---
+新北市 1000 ns
+台北市 1000 ns
+臺北市 1000 ns
+桃園市 1000 ns
+台中市 1000 ns
+臺中市 1000 ns
+台南市 1000 ns
+臺南市 1000 ns
+高雄市 1000 ns
+基隆市 1000 ns
+新竹縣 1000 ns
+新竹市 1000 ns
+苗栗縣 1000 ns
+彰化縣 1000 ns
+南投縣 1000 ns
+雲林縣 1000 ns
+嘉義縣 1000 ns
+嘉義市 1000 ns
+屏東縣 1000 ns
+宜蘭縣 1000 ns
+花蓮縣 1000 ns
+台東縣 1000 ns
+臺東縣 1000 ns
+澎湖縣 1000 ns
+金門縣 1000 ns
+連江縣 1000 ns

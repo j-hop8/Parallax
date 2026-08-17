@@ -1,0 +1,28 @@
+# Raw HTML cache — content-addressed, regenerable, and large. Never committed.
+raw/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Models and datasets produced by training runs
+models/
+*.safetensors
+*.bin
+
+# Gold-set labels ARE committed (eval/*.csv) — they are hand-made and irreplaceable.
+# Model outputs and scratch are not.
+eval/runs/
+
+.DS_Store
+.env
+
+# 8.2MB jieba traditional dictionary, fetched by `make dict`
+config/dict.txt.big
