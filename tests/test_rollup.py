@@ -11,7 +11,7 @@ data is never touched.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -152,3 +152,49 @@ def test_failed_runs_do_not_count_as_coverage(conn):
         _seed_article(cur, f"{day} 15:00:00")
         _run_rollup(cur)
         assert _completeness(cur, day) is False
+
+
+def test_backfill_never_overwrites_a_feed_supplied_timestamp(conn):
+    """A feed timestamp beats a scraped one and must survive re-enrichment.
+
+    A feed records the time at publication; a scraped page yields whatever the
+    rendered markup says later. Overwriting the better source would quietly
+    degrade propagation ordering, and enrich is designed to be re-runnable, so
+    this has to hold on the second pass as well as the first.
+    """
+    from datetime import datetime
+
+    from parallax import db
+
+    good = datetime(2026, 7, 1, 9, 0, tzinfo=UTC)
+    scraped = datetime(2026, 7, 1, 15, 0, tzinfo=UTC)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO article_index (outlet, url_canonical, url_original, title, published_at) "
+            "VALUES (%s,'u-has-date','u-has-date','t',%s) RETURNING id",
+            (OUTLET, good),
+        )
+        with_date = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO article_index (outlet, url_canonical, url_original, title) "
+            "VALUES (%s,'u-no-date','u-no-date','t') RETURNING id",
+            (OUTLET,),
+        )
+        without_date = cur.fetchone()[0]
+
+    db.backfill_published_at(conn, with_date, scraped)
+    db.backfill_published_at(conn, without_date, scraped)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, published_at, effective_at FROM article_index WHERE id = ANY(%s)",
+            ([with_date, without_date],),
+        )
+        rows = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+
+    assert rows[with_date][0] == good, "feed timestamp was overwritten by a scraped one"
+    assert rows[without_date][0] == scraped, "dateless article was not backfilled"
+    # effective_at is generated, so it must track the new value automatically --
+    # that recomputation is what actually reorders the propagation chain.
+    assert rows[without_date][1] == scraped
