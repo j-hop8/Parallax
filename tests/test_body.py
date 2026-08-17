@@ -108,3 +108,42 @@ def test_refetch_bypasses_the_cache_deliberately(raw_dir):
 
     assert from_cache is False
     assert fetcher.calls == 2
+
+
+def test_concurrent_writers_cannot_corrupt_an_entry(raw_dir):
+    """Two enrich runs may legitimately match the same article.
+
+    Different keywords can select overlapping articles, and Airflow will
+    eventually launch those runs concurrently. With a temp name derived from the
+    target, the second writer's rename fails with FileNotFoundError -- the first
+    already moved that temp away. Reproduced at 3 errors per 4 threads x 5
+    writes, which in enrich means a good article marked failed and re-fetched.
+
+    The content itself is never at risk, because rename is atomic; this asserts
+    on the errors, which are.
+    """
+    import threading
+
+    path = mod.cache_path("udn", "https://udn.com/news/story/9/9", DAY)
+    payload = "<html>" + ("內容" * 4000) + "</html>"
+    errors: list[BaseException] = []
+
+    def _write():
+        try:
+            for _ in range(5):
+                mod.write_cache(path, payload)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_write) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"concurrent writes raised: {errors}"
+    # Whichever writer landed last, the entry must be complete and readable --
+    # not a half-written mixture of two streams.
+    assert mod.read_cached(path) == payload
+    # And no temp files may be left behind.
+    assert list(path.parent.glob("*.tmp")) == []

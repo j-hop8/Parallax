@@ -3,6 +3,8 @@ from __future__ import annotations
 import gzip
 import hashlib
 import logging
+import os
+import tempfile
 import zlib
 from datetime import datetime
 from pathlib import Path
@@ -49,12 +51,33 @@ def write_cache(path: Path, html: str) -> None:
     The temp-then-rename matters because enrich runs are interrupted often on
     this host: a half-written .gz would otherwise be indistinguishable from a
     good one on the next run.
+
+    The temp name is unique per writer rather than derived from the target. Two
+    enrich runs for different keywords can legitimately match the same article,
+    and Airflow will eventually launch them concurrently. With a shared
+    `<sha>.tmp` the content is never corrupted -- rename is atomic -- but the
+    second writer's rename fails with FileNotFoundError because the first already
+    moved that temp away. Measured: 4 threads x 5 writes produced 3 such errors.
+    In enrich that surfaces as a perfectly good article marked failed and
+    re-fetched later, so it costs an outlet request for nothing.
+
+    With a unique temp per writer both renames succeed and land identical
+    content, making last-writer-wins genuinely harmless.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    with gzip.open(tmp, "wt", encoding="utf-8") as fh:
-        fh.write(html)
-    tmp.replace(path)
+
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        with gzip.open(tmp, "wt", encoding="utf-8") as fh:
+            fh.write(html)
+        tmp.replace(path)
+    except BaseException:
+        # Never leave a stray temp behind, including on KeyboardInterrupt --
+        # which is how these runs usually end.
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def fetch_html(

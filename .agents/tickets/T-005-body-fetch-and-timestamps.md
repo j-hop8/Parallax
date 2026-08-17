@@ -14,7 +14,22 @@ the project's differentiator.
 ## Files in scope
 
 `src/parallax/crawl/{extract,body}.py`, `src/parallax/jobs/enrich.py`,
-`tests/test_extract.py`, `tests/fixtures/articles/**`
+`tests/{test_extract,test_body}.py`, `tests/fixtures/articles/**`
+
+Widened after pre-review flagged the diff reaching outside the original list.
+Three additions are load-bearing rather than scope creep, and saying so here is
+cheaper than arguing it per-review:
+
+- `src/parallax/db.py` — enrichment needs `save_enriched`,
+  `backfill_published_at` and `mark_enrich_failed`. Every other write in this
+  project goes through `db.py`; putting these inline in the job would be the
+  actual violation.
+- `src/parallax/search.py` — the query did not return `url_canonical`, `seen_at`
+  or `published_at`. Enrichment needs all three to key the cache and to decide
+  whether backfilling is even allowed.
+- `tests/test_rollup.py` — the backfill-guard test belongs beside the other
+  Postgres-backed tests, which already live there with the rolled-back
+  transaction fixture.
 
 ## Do not touch
 
