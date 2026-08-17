@@ -13,8 +13,19 @@ the full rationale and `Design.pdf` for the target UI.
    exists. Check `make health` before assuming things are fine.
 
 2. **One outlet failing must not abort the crawl.** Every adapter runs isolated
-   and records to `crawl_runs` either way. `items_seen = 0` on a healthy run is
-   the signature of a broken selector, not a quiet day.
+   and records to `crawl_runs` either way — including the database writes, not
+   just the fetch. `items_seen = 0` on a healthy run is the signature of a broken
+   selector, not a quiet day.
+
+   1a. **A sleeping laptop is not a valid host.** Measured over the first 24h on
+   this Mac: 229 of 458 runs failed and three hours produced no runs at all.
+   `pmset` showed `Clamshell Sleep` with `powernap 0` (nothing scheduled runs
+   while asleep) plus `DarkWake ... RTC/Maintenance` windows where the job fired
+   before Wi-Fi re-associated. launchd and retries reduce this; they cannot fix
+   it, because articles published during a long sleep scroll out of the feeds and
+   are gone. If `make health` shows multi-hour gaps, move the crawl to an
+   always-on host — that is the only real fix, and no amount of code substitutes
+   for it.
 
 3. **Days are `Asia/Taipei`, never UTC.** Bucketing by UTC misfiles everything
    published after 08:00 local and corrupts the denominator.

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Tier-1 listing crawl, every 20 minutes.
+
+  launchd rather than cron for one specific reason: when a StartInterval job is
+  missed because the machine was asleep, launchd runs it immediately on wake.
+  cron simply skips the slot and waits for the next one, which on this host cost
+  entire nights of listings that cannot be re-fetched.
+
+  Paths are substituted by `make sched.install` -- launchd needs absolute paths
+  and will not expand $HOME or read a shell profile.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.parallax.crawl</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>cd @@ROOT@@ &amp;&amp; @@UV@@ run python -m parallax.jobs.crawl_listing</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>1200</integer>
+
+    <!-- Catch up as soon as the agent loads, e.g. after a reboot. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>@@ROOT@@/logs/crawl.log</string>
+    <key>StandardErrorPath</key>
+    <string>@@ROOT@@/logs/crawl.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>@@ROOT@@</string>
+
+    <!-- Never let two crawls overlap; the upsert is idempotent but concurrent
+         runs waste the outlets' bandwidth for nothing. -->
+    <key>AbandonProcessGroup</key>
+    <false/>
+</dict>
+</plist>

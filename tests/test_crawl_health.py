@@ -8,7 +8,10 @@ rollup mark the day complete and use a short count as a coverage denominator.
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
+import requests
 
 from parallax.config import UnverifiedOutletError
 from parallax.crawl.adapters.base import PartialFetchError, RSSAdapter
@@ -72,6 +75,78 @@ def test_all_feeds_working_returns_cleanly():
     assert isinstance(stubs[0], ArticleStub)
 
 
+class _StubAdapter:
+    def __init__(self, code):
+        self.code = code
+
+    def fetch(self):
+        return [
+            ArticleStub(
+                outlet=self.code,
+                url_original=f"https://example.com/{self.code}/1",
+                title="t",
+                published_at=None,
+            )
+        ]
+
+
+def test_a_write_failure_for_one_outlet_does_not_stop_the_others(monkeypatch):
+    """The isolation guarantee, exercised through crawl_all rather than the adapter.
+
+    Round 1's fix persisted partial results inside the except handler, where a
+    database error escaped the per-outlet try -- aborting the crawl, skipping
+    every later outlet, and recording nothing. Testing only the adapter missed
+    this entirely, which is how it shipped.
+    """
+    from parallax.crawl import listing as mod
+
+    outlets = [_outlet("a"), _outlet("b"), _outlet("c")]
+    monkeypatch.setattr(mod, "load_outlets", lambda: ({}, outlets))
+    monkeypatch.setattr(mod, "_build_fetcher", lambda defaults: None)
+    monkeypatch.setattr(mod, "build_adapter", lambda cfg, fetcher: _StubAdapter(cfg.code))
+
+    class _Conn:
+        def __init__(self):
+            self.commits = 0
+            self.rollbacks = 0
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
+    conn = _Conn()
+
+    @contextlib.contextmanager
+    def _connect():
+        yield conn
+
+    recorded: list = []
+    monkeypatch.setattr(mod.db, "connect", _connect)
+    monkeypatch.setattr(mod.db, "ensure_outlets", lambda c, o: None)
+    monkeypatch.setattr(mod.db, "record_crawl_run", lambda c, r: recorded.append(r))
+
+    def _upsert(c, stubs):
+        if stubs and stubs[0].outlet == "b":
+            raise RuntimeError("disk full")
+        return len(stubs), len(stubs)
+
+    monkeypatch.setattr(mod.db, "upsert_article_index", _upsert)
+
+    results = mod.crawl_all()
+
+    # Every outlet was attempted -- 'b' failing did not truncate the loop.
+    assert [r.outlet for r in results] == ["a", "b", "c"]
+    assert [r.ok for r in results] == [True, False, True]
+
+    # And every outcome reached crawl_runs, including the failure. A failure that
+    # is not recorded is worse than the failure itself.
+    assert len(recorded) == 3
+    assert "disk full" in recorded[1].error
+    assert conn.rollbacks >= 1
+
+
 def test_naming_an_unverified_outlet_raises_rather_than_skipping():
     """A silent skip looks identical to a successful crawl of that outlet."""
     outlets = [_outlet("cna"), _outlet("setn", verified=False)]
@@ -85,3 +160,102 @@ def test_naming_an_unverified_outlet_raises_rather_than_skipping():
     # The bulk crawl must still be allowed to run and skip it.
     _check_explicit_target(outlets, None)
     _check_explicit_target(outlets, "cna")
+
+
+def test_transient_network_errors_retry_but_http_errors_do_not(monkeypatch):
+    """On a dark wake the scheduler fires before Wi-Fi associates.
+
+    That first attempt fails against every outlet at once while the network is
+    milliseconds from working, so retrying recovers a cycle of listings that
+    cannot be re-fetched. A 404 will never become a 200, though, and retrying it
+    would only hammer the outlet.
+    """
+    from parallax.crawl.http import Fetcher
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)  # keep the test instant
+
+    fetcher = Fetcher("test-agent", timeout=1, min_delay=0)
+    attempts = {"n": 0}
+
+    def _flaky(url, timeout):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise requests.ConnectionError("network down")
+
+        class _R:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+        return _R()
+
+    monkeypatch.setattr(fetcher._session, "get", _flaky)
+    assert fetcher.get("https://example.com/a").status_code == 200
+    assert attempts["n"] == 3, "should have retried twice before succeeding"
+
+    # A 404 is the server answering. One attempt only.
+    attempts["n"] = 0
+
+    def _not_found(url, timeout):
+        attempts["n"] += 1
+
+        class _R:
+            status_code = 404
+
+            def raise_for_status(self):
+                raise requests.HTTPError("404")
+
+        return _R()
+
+    monkeypatch.setattr(fetcher._session, "get", _not_found)
+    with pytest.raises(requests.HTTPError):
+        fetcher.get("https://example.com/missing")
+    assert attempts["n"] == 1, "HTTP status errors must not be retried"
+
+
+def test_retries_are_exhausted_and_the_error_surfaces(monkeypatch):
+    """A permanently dead network must raise, not silently return nothing."""
+    from parallax.crawl.http import Fetcher
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    fetcher = Fetcher("test-agent", timeout=1, min_delay=0)
+
+    def _always_down(url, timeout):
+        raise requests.ConnectionError("still down")
+
+    monkeypatch.setattr(fetcher._session, "get", _always_down)
+    with pytest.raises(requests.ConnectionError):
+        fetcher.get("https://example.com/a")
+
+
+def test_network_preflight_returns_false_rather_than_raising(monkeypatch):
+    """A dead network must not abort the crawl.
+
+    Returning False lets the run proceed and record real failures in crawl_runs.
+    Raising here would leave no row at all, and an invisible gap is worse than a
+    recorded one -- it is exactly what the completeness flag relies on seeing.
+    """
+    from parallax.crawl.http import wait_for_network
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    # 192.0.2.0/24 is TEST-NET-1: reserved, guaranteed unroutable.
+    assert wait_for_network(probe_hosts=("192.0.2.1",), timeout=0.01, interval=0.01) is False
+
+
+def test_network_preflight_succeeds_without_waiting_when_reachable(monkeypatch):
+    from parallax.crawl import http as mod
+
+    class _Sock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    slept = []
+    monkeypatch.setattr(mod.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(mod.socket, "create_connection", lambda addr, timeout: _Sock())
+
+    assert mod.wait_for_network(timeout=60) is True
+    assert slept == [], "must not sleep when the network is already up"

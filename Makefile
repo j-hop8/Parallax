@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint
+.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -79,11 +79,61 @@ rollup:
 # here means data is being lost right now and cannot be backfilled.
 health:
 	@$(PSQL) -c "\
+	WITH r AS ( \
+	  SELECT outlet, started_at, \
+	         started_at - lag(started_at) OVER (PARTITION BY outlet ORDER BY started_at) AS gap \
+	  FROM crawl_runs WHERE ok AND started_at > now() - interval '24 hours') \
 	SELECT outlet, \
-	       max(started_at) AS last_run, \
-	       sum(items_new) FILTER (WHERE started_at > now() - interval '24 hours') AS new_24h, \
-	       count(*) FILTER (WHERE NOT ok AND started_at > now() - interval '24 hours') AS failures_24h \
-	FROM crawl_runs GROUP BY outlet ORDER BY outlet;"
+	       to_char(max(started_at) AT TIME ZONE 'Asia/Taipei','MM-DD HH24:MI') AS last_ok, \
+	       count(*) AS ok_runs, \
+	       coalesce(max(gap), interval '0') AS largest_gap \
+	FROM r GROUP BY outlet ORDER BY largest_gap DESC NULLS LAST;"
+	@echo "-- largest_gap is the number that matters: the crawl runs every 20 min, so"
+	@echo "-- anything past ~1h is coverage this project can never get back."
+	@$(PSQL) -tc "SELECT count(*) FILTER (WHERE NOT ok) || ' failed runs in 24h' FROM crawl_runs WHERE started_at > now() - interval '24 hours';"
+
+# Install the launchd agents and remove the cron entries, so the two can never
+# double-run. launchd is used because it re-runs a job missed during sleep.
+sched.install:
+	@mkdir -p ~/Library/LaunchAgents logs
+	@UV=$$(command -v uv); \
+	if [ -z "$$UV" ]; then \
+		echo "uv not found on PATH -- refusing to write a plist that cannot run" >&2; \
+		exit 1; \
+	fi; \
+	for j in crawl rollup; do \
+		sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" \
+			ops/com.parallax.$$j.plist.template > ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+		plutil -lint ~/Library/LaunchAgents/com.parallax.$$j.plist >/dev/null || exit 1; \
+		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
+		launchctl load ~/Library/LaunchAgents/com.parallax.$$j.plist || exit 1; \
+		echo "loaded com.parallax.$$j"; \
+	done
+	@# Editing the user's crontab is destructive, so: only touch it when a
+	@# parallax entry actually exists, back it up first, and never write from a
+	@# failed read -- piping the output of a failed `crontab -l` would install an
+	@# EMPTY crontab and silently destroy unrelated jobs.
+	@if crontab -l > /tmp/parallax-crontab.current 2>/dev/null; then \
+		if grep -q 'parallax.jobs' /tmp/parallax-crontab.current; then \
+			cp /tmp/parallax-crontab.current $$HOME/.parallax-crontab.backup; \
+			grep -v -e 'parallax.jobs' -e 'Parallax tier-1' -e 'permanently unrecoverable' \
+				-e 'Daily totals (Asia/Taipei' /tmp/parallax-crontab.current | crontab -; \
+			echo "removed parallax cron entries (backup: ~/.parallax-crontab.backup)"; \
+		else \
+			echo "no parallax cron entries present; crontab left untouched"; \
+		fi; \
+	else \
+		echo "no crontab for this user; nothing to remove"; \
+	fi
+	@rm -f /tmp/parallax-crontab.current
+	@launchctl list | grep parallax || true
+
+sched.uninstall:
+	@for j in crawl rollup; do \
+		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
+		rm -f ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+	done
+	@echo "launchd agents removed"
 
 test:
 	uv run pytest -q

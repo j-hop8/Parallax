@@ -109,35 +109,49 @@ def crawl_all(only: str | None = None) -> list[CrawlResult]:
                 continue
 
             result = CrawlResult(outlet=cfg.code)
+
+            # The whole per-outlet body is guarded, database writes included.
+            # Previously only fetch() was: a failure while *persisting* a partial
+            # result escaped this loop, aborting the crawl, skipping every
+            # remaining outlet, and recording nothing -- turning one outlet's
+            # problem into total, unrecoverable loss for all eight.
             try:
-                stubs = build_adapter(cfg, fetcher).fetch()
-            except PartialFetchError as exc:
-                # Store what did arrive -- those articles are real and cannot be
-                # re-fetched -- but the run is degraded, so ok stays False and
-                # the day it touches will not qualify as a complete denominator.
-                result.items_seen, result.items_new = db.upsert_article_index(conn, exc.stubs)
-                result.error = f"PartialFetchError: {exc}"[:2000]
-                log.warning("partial crawl for %s: %s", cfg.code, exc)
+                try:
+                    stubs = build_adapter(cfg, fetcher).fetch()
+                except PartialFetchError as exc:
+                    # Keep what did arrive: those articles are real and cannot be
+                    # re-fetched. The run is still degraded, so ok stays False and
+                    # the day it touches will not qualify as a denominator.
+                    stubs = exc.stubs
+                    result.error = f"PartialFetchError: {exc}"[:2000]
+                    log.warning("partial crawl for %s: %s", cfg.code, exc)
+
+                result.items_seen, result.items_new = db.upsert_article_index(conn, stubs)
+
+                if result.error is None:
+                    # Zero items from a verified outlet is a broken selector or a
+                    # dead feed, never a quiet 20 minutes -- a listing returns its
+                    # current window regardless of how much is new.
+                    result.ok = result.items_seen > 0
+                    if not result.ok:
+                        result.error = "adapter returned 0 items -- selector or feed likely broken"
+                        log.error("%s returned 0 items", cfg.code)
             except Exception as exc:
+                result.ok = False
                 result.error = f"{type(exc).__name__}: {exc}"[:2000]
                 log.exception("crawl failed for %s", cfg.code)
-                # The connection may be in an aborted transaction; clear it so the
-                # crawl_runs insert below can still record the failure.
+                # The transaction may be aborted; clear it so the run below records.
                 conn.rollback()
-            else:
-                result.items_seen, result.items_new = db.upsert_article_index(conn, stubs)
-                # Zero items from a verified outlet is a broken selector or a
-                # dead feed, never a quiet 20 minutes -- a listing always returns
-                # its current window regardless of how much is new. Recording it
-                # as ok would let a silently dead adapter satisfy rollup
-                # completeness while articles are lost for good.
-                result.ok = result.items_seen > 0
-                if not result.ok:
-                    result.error = "adapter returned 0 items -- selector or feed likely broken"
-                    log.error("%s returned 0 items", cfg.code)
 
-            db.record_crawl_run(conn, result)
-            conn.commit()
+            # Recording the outcome must survive anything above, or a failure
+            # becomes invisible -- which is worse than the failure itself.
+            try:
+                db.record_crawl_run(conn, result)
+                conn.commit()
+            except Exception:
+                log.exception("could not record crawl_run for %s", cfg.code)
+                conn.rollback()
+
             results.append(result)
 
     return results

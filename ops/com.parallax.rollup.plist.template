@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly rollup of outlet_daily_totals, 00:20 Taipei local.
+
+  StartCalendarInterval, unlike StartInterval, fires on the next wake if the
+  scheduled time passed while asleep -- so the previous day still gets its
+  completeness flag computed even if the machine was shut for the night.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.parallax.rollup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>cd @@ROOT@@ &amp;&amp; @@UV@@ run python -m parallax.jobs.rollup_daily</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>0</integer>
+        <key>Minute</key><integer>20</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>@@ROOT@@/logs/rollup.log</string>
+    <key>StandardErrorPath</key>
+    <string>@@ROOT@@/logs/rollup.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>@@ROOT@@</string>
+</dict>
+</plist>
