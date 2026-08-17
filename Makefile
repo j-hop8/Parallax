@@ -96,15 +96,35 @@ health:
 # double-run. launchd is used because it re-runs a job missed during sleep.
 sched.install:
 	@mkdir -p ~/Library/LaunchAgents logs
-	@for j in crawl rollup; do \
-		sed -e "s|@@ROOT@@|$(CURDIR)|g" -e "s|@@UV@@|$$(command -v uv)|g" \
+	@UV=$$(command -v uv); \
+	if [ -z "$$UV" ]; then \
+		echo "uv not found on PATH -- refusing to write a plist that cannot run" >&2; \
+		exit 1; \
+	fi; \
+	for j in crawl rollup; do \
+		sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" \
 			ops/com.parallax.$$j.plist.template > ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+		plutil -lint ~/Library/LaunchAgents/com.parallax.$$j.plist >/dev/null || exit 1; \
 		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
-		launchctl load ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+		launchctl load ~/Library/LaunchAgents/com.parallax.$$j.plist || exit 1; \
 		echo "loaded com.parallax.$$j"; \
 	done
-	@crontab -l 2>/dev/null | grep -v 'parallax.jobs' | crontab - 2>/dev/null || true
-	@echo "cron entries for parallax removed (launchd now owns the schedule)"
+	@# Editing the user's crontab is destructive, so: only touch it when a
+	@# parallax entry actually exists, back it up first, and never write from a
+	@# failed read -- piping the output of a failed `crontab -l` would install an
+	@# EMPTY crontab and silently destroy unrelated jobs.
+	@if crontab -l > /tmp/parallax-crontab.current 2>/dev/null; then \
+		if grep -q 'parallax.jobs' /tmp/parallax-crontab.current; then \
+			cp /tmp/parallax-crontab.current $$HOME/.parallax-crontab.backup; \
+			grep -v 'parallax.jobs' /tmp/parallax-crontab.current | crontab -; \
+			echo "removed parallax cron entries (backup: ~/.parallax-crontab.backup)"; \
+		else \
+			echo "no parallax cron entries present; crontab left untouched"; \
+		fi; \
+	else \
+		echo "no crontab for this user; nothing to remove"; \
+	fi
+	@rm -f /tmp/parallax-crontab.current
 	@launchctl list | grep parallax || true
 
 sched.uninstall:
