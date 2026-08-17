@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint
+.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -79,11 +79,40 @@ rollup:
 # here means data is being lost right now and cannot be backfilled.
 health:
 	@$(PSQL) -c "\
+	WITH r AS ( \
+	  SELECT outlet, started_at, \
+	         started_at - lag(started_at) OVER (PARTITION BY outlet ORDER BY started_at) AS gap \
+	  FROM crawl_runs WHERE ok AND started_at > now() - interval '24 hours') \
 	SELECT outlet, \
-	       max(started_at) AS last_run, \
-	       sum(items_new) FILTER (WHERE started_at > now() - interval '24 hours') AS new_24h, \
-	       count(*) FILTER (WHERE NOT ok AND started_at > now() - interval '24 hours') AS failures_24h \
-	FROM crawl_runs GROUP BY outlet ORDER BY outlet;"
+	       to_char(max(started_at) AT TIME ZONE 'Asia/Taipei','MM-DD HH24:MI') AS last_ok, \
+	       count(*) AS ok_runs, \
+	       coalesce(max(gap), interval '0') AS largest_gap \
+	FROM r GROUP BY outlet ORDER BY largest_gap DESC NULLS LAST;"
+	@echo "-- largest_gap is the number that matters: the crawl runs every 20 min, so"
+	@echo "-- anything past ~1h is coverage this project can never get back."
+	@$(PSQL) -tc "SELECT count(*) FILTER (WHERE NOT ok) || ' failed runs in 24h' FROM crawl_runs WHERE started_at > now() - interval '24 hours';"
+
+# Install the launchd agents and remove the cron entries, so the two can never
+# double-run. launchd is used because it re-runs a job missed during sleep.
+sched.install:
+	@mkdir -p ~/Library/LaunchAgents logs
+	@for j in crawl rollup; do \
+		sed -e "s|@@ROOT@@|$(CURDIR)|g" -e "s|@@UV@@|$$(command -v uv)|g" \
+			ops/com.parallax.$$j.plist.template > ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
+		launchctl load ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+		echo "loaded com.parallax.$$j"; \
+	done
+	@crontab -l 2>/dev/null | grep -v 'parallax.jobs' | crontab - 2>/dev/null || true
+	@echo "cron entries for parallax removed (launchd now owns the schedule)"
+	@launchctl list | grep parallax || true
+
+sched.uninstall:
+	@for j in crawl rollup; do \
+		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
+		rm -f ~/Library/LaunchAgents/com.parallax.$$j.plist; \
+	done
+	@echo "launchd agents removed"
 
 test:
 	uv run pytest -q

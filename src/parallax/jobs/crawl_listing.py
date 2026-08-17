@@ -4,6 +4,7 @@ import argparse
 import logging
 import sys
 
+from ..crawl.http import wait_for_network
 from ..crawl.listing import crawl_all, crawl_dry_run
 
 log = logging.getLogger(__name__)
@@ -17,6 +18,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Fetch and report counts without writing to the database.",
     )
+    parser.add_argument(
+        "--wait-network",
+        type=float,
+        default=120.0,
+        metavar="SECONDS",
+        help="wait up to SECONDS for connectivity before crawling (0 disables)",
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
 
@@ -24,6 +32,13 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+
+    if not args.dry_run and args.wait_network:
+        # The scheduler can fire during a dark wake, before Wi-Fi re-associates.
+        # Waiting here is free when the network is up and saves the whole cycle
+        # when it is not -- otherwise the first feeds in config order are spent
+        # on a dead interface.
+        wait_for_network(timeout=args.wait_network)
 
     if args.dry_run:
         results = crawl_dry_run(only=args.outlet)
