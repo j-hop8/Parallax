@@ -14,6 +14,12 @@ from ..search import find_articles
 
 log = logging.getLogger(__name__)
 
+# Shorter than this is not an article. Real bodies in this corpus run 500-1500
+# chars; the shortest legitimate one measured was 562. Set well below that so a
+# genuinely terse story is not rejected, but far above the 0-1 chars an
+# unrecognised layout yields.
+_MIN_BODY_CHARS = 80
+
 
 def enrich_keyword(keyword: str, limit: int = 200, refetch: bool = False) -> dict[str, int]:
     """Tier 2: fetch and enrich only the articles a keyword actually matched.
@@ -50,12 +56,28 @@ def enrich_keyword(keyword: str, limit: int = 200, refetch: bool = False) -> dic
                     row["outlet"],
                     row["url_original"],
                     row["url_canonical"],
-                    row["effective_at"],
+                    # seen_at, not effective_at: backfilling published_at rewrites
+                    # effective_at, which would move the cache entry and re-fetch.
+                    row["seen_at"],
                     refetch=refetch,
                 )
                 stats["cached" if from_cache else "fetched"] += 1
 
                 body = extract_body(html)
+                # An empty body is a silent success, which is the failure mode
+                # this project least tolerates: enrich_state='fetched' with no
+                # text would let dedup and stance run downstream on nothing and
+                # report confident results about an article we never read. It
+                # means the extractor met a layout it does not know -- a
+                # redesign, a paywall interstitial, a bot-block page -- so it is
+                # recorded as failed, with the page kept in the cache so the fix
+                # re-runs locally.
+                if not body or len(body) < _MIN_BODY_CHARS:
+                    raise ValueError(
+                        f"extracted body too short ({len(body)} chars) -- "
+                        f"layout likely unrecognised; cached at {path}"
+                    )
+
                 recovered = extract_published_at(
                     html,
                     seen_at=row["seen_at"],

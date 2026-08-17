@@ -147,3 +147,32 @@ def test_concurrent_writers_cannot_corrupt_an_entry(raw_dir):
     assert mod.read_cached(path) == payload
     # And no temp files may be left behind.
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_cache_path_is_stable_when_published_at_is_backfilled(raw_dir):
+    """The path must not depend on a column enrich itself rewrites.
+
+    effective_at is generated from published_at, and enrich backfills
+    published_at. Keying the folder on it meant an article seen at 00:05 UTC
+    whose real publish time was 23:55 the previous day moved folders on the
+    second pass, missed the cache, and was re-fetched -- breaking the
+    one-fetch-per-article guarantee. seen_at is written once and never updated.
+    """
+    from datetime import timedelta
+
+    url = "https://udn.com/news/story/7321/9999999"
+    seen = datetime(2026, 8, 18, 0, 5, tzinfo=UTC)
+    # What effective_at would become after backfilling an earlier publish time.
+    published = seen - timedelta(minutes=10)
+    assert seen.date() != published.date(), "fixture must straddle a UTC day boundary"
+
+    # Both runs key on the same immutable seen_at, so the path cannot move.
+    assert mod.cache_path("udn", url, seen) == mod.cache_path("udn", url, seen)
+
+    fetcher = _Fetcher()
+    _, path1, cached1 = mod.fetch_html(fetcher, "udn", url, url, seen)
+    _, path2, cached2 = mod.fetch_html(fetcher, "udn", url, url, seen)
+
+    assert (cached1, cached2) == (False, True)
+    assert path1 == path2
+    assert fetcher.calls == 1, "a backfill between runs must not cause a re-fetch"

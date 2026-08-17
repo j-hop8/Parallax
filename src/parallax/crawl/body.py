@@ -15,16 +15,23 @@ from .http import Fetcher
 log = logging.getLogger(__name__)
 
 
-def cache_path(outlet: str, url_canonical: str, day: datetime) -> Path:
+def cache_path(outlet: str, url_canonical: str, seen_at: datetime) -> Path:
     """Content-addressed location for one article's raw HTML.
 
     Keyed on the canonical URL so the same article always lands in the same file,
-    and foldered by the article's own day rather than the fetch date so the path
-    is derivable from the database row alone -- no stored path needed to find it
-    again after a crash.
+    and foldered by seen_at so the path stays derivable from the database row
+    alone -- no stored path needed to find it again after a crash.
+
+    seen_at, NOT effective_at. effective_at is a generated column derived from
+    published_at, and enrich itself backfills published_at -- so keying on it
+    meant the folder changed underneath us between runs. An article seen at
+    00:05 UTC whose real publish time was 23:55 the day before moved to a
+    different folder on the second pass, missed the cache, and was re-fetched
+    from the outlet, breaking the one-fetch-per-article guarantee this cache
+    exists to provide. seen_at is written once at first sight and never updated.
     """
     digest = hashlib.sha256(url_canonical.encode("utf-8")).hexdigest()
-    return RAW_DIR / outlet / day.strftime("%Y-%m-%d") / f"{digest}.html.gz"
+    return RAW_DIR / outlet / seen_at.strftime("%Y-%m-%d") / f"{digest}.html.gz"
 
 
 def read_cached(path: Path) -> str | None:
@@ -85,7 +92,7 @@ def fetch_html(
     outlet: str,
     url_original: str,
     url_canonical: str,
-    day: datetime,
+    seen_at: datetime,
     *,
     refetch: bool = False,
 ) -> tuple[str, Path, bool]:
@@ -96,7 +103,7 @@ def fetch_html(
     sites to correct our own selector bug would be both slow and rude. The cache
     means a body is fetched from an outlet exactly once.
     """
-    path = cache_path(outlet, url_canonical, day)
+    path = cache_path(outlet, url_canonical, seen_at)
 
     if not refetch:
         cached = read_cached(path)
