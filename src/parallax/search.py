@@ -7,7 +7,8 @@ from .nlp.segment import segment_text
 # Single seam for keyword lookup. Phase 2 replaces this function body with an
 # Elasticsearch query; nothing above it needs to change.
 _SEARCH = """
-SELECT ai.id, ai.outlet, ai.title, ai.url_original, ai.effective_at,
+SELECT ai.id, ai.outlet, ai.title, ai.url_original, ai.url_canonical,
+       ai.published_at, ai.seen_at, ai.effective_at,
        ts_rank(to_tsvector('simple', ai.title_seg), query) AS rank
 FROM article_index ai, plainto_tsquery('simple', %(q)s) query
 WHERE to_tsvector('simple', ai.title_seg) @@ query

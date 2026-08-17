@@ -90,3 +90,69 @@ def ensure_outlets(conn: psycopg.Connection, outlets: Iterable) -> None:
                 """,
                 (o.code, o.name_zh, o.home_url),
             )
+
+
+def save_enriched(
+    conn: psycopg.Connection,
+    *,
+    article_id: int,
+    body: str | None,
+    body_seg: str | None,
+    raw_html_path: str,
+) -> None:
+    """Upsert the tier-2 row and flag the index entry as fetched.
+
+    Idempotent so an interrupted enrich run can simply be re-run: the same
+    article re-processed overwrites its own row rather than erroring or
+    duplicating.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO articles (id, body, body_seg, raw_html_path, enrich_state, updated_at)
+            VALUES (%s, %s, %s, %s, 'fetched', now())
+            ON CONFLICT (id) DO UPDATE
+                SET body = EXCLUDED.body,
+                    body_seg = EXCLUDED.body_seg,
+                    raw_html_path = EXCLUDED.raw_html_path,
+                    enrich_state = 'fetched',
+                    enrich_error = NULL,
+                    updated_at = now()
+            """,
+            (article_id, body, body_seg, raw_html_path),
+        )
+        cur.execute("UPDATE article_index SET body_fetched = TRUE WHERE id = %s", (article_id,))
+
+
+def backfill_published_at(conn: psycopg.Connection, article_id: int, published_at) -> None:
+    """Write a timestamp recovered from the article page into article_index.
+
+    This is what makes the four dateless outlets usable in a propagation chain.
+    effective_at is a generated column, so it recomputes automatically and the
+    article immediately sorts by its real publish time instead of by when we
+    happened to crawl it.
+
+    Guarded with `published_at IS NULL` so a feed-supplied timestamp is never
+    overwritten by a scraped one, even if this runs twice.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE article_index SET published_at = %s WHERE id = %s AND published_at IS NULL",
+            (published_at, article_id),
+        )
+
+
+def mark_enrich_failed(conn: psycopg.Connection, article_id: int, error: str) -> None:
+    """Record that one article could not be enriched, without losing the reason."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO articles (id, enrich_state, enrich_error, updated_at)
+            VALUES (%s, 'failed', %s, now())
+            ON CONFLICT (id) DO UPDATE
+                SET enrich_state = 'failed',
+                    enrich_error = EXCLUDED.enrich_error,
+                    updated_at = now()
+            """,
+            (article_id, error[:2000]),
+        )
