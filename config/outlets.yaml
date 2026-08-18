@@ -16,6 +16,10 @@ defaults:
   rate_limit_seconds: 2.0        # per-outlet token bucket; deliberately conservative
   user_agent: "ParallaxResearchBot/0.1 (media-coverage research; contact: j8211080@gmail.com)"
   timeout_seconds: 20
+  # Upper bound on time spent per outlet per run. Normal cost is ~22s for 中央社
+  # (11 feeds at the 2s rate limit) and under a second for the rest, so this only
+  # engages when a host hangs. Feeds not reached are reported, not dropped.
+  budget_seconds: 180
 
 outlets:
   # ---------------------------------------------------------------- RSS ----

@@ -291,3 +291,44 @@ def test_crawl_runs_records_the_real_start_not_the_write_time(monkeypatch):
     sql = inspect.getsource(db.record_crawl_run)
     assert "started_at" in sql, "record_crawl_run must write started_at explicitly"
     assert "result.started_at" in sql
+
+
+def test_one_hanging_outlet_cannot_consume_the_whole_crawl_cycle(monkeypatch):
+    """A host that accepts connections then hangs must not starve the others.
+
+    中央社 is polled across 11 feeds. Without a budget, timeout x retries per
+    feed can exceed the 20-minute interval on its own, delaying or skipping every
+    outlet queued behind it -- and tier-1 data missed that way is unrecoverable.
+
+    The unreached feeds are reported as errors rather than dropped, so the run is
+    honestly degraded and its day cannot qualify as a denominator.
+    """
+    import time as _time
+
+    cfg = _outlet(n_feeds=6)
+    object.__setattr__(cfg, "budget_seconds", 0.05)
+
+    class _Hanging:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url):
+            self.calls += 1
+            _time.sleep(0.04)  # each feed eats a big slice of the budget
+            raise ConnectionError("hung")
+
+    fetcher = _Hanging()
+    with pytest.raises(PartialFetchError) as excinfo:
+        RSSAdapter(cfg, fetcher).fetch()
+
+    # It gave up well before working through all six feeds.
+    assert fetcher.calls < 6, f"budget not enforced; made {fetcher.calls} calls"
+    # Every feed is still accounted for -- attempted or skipped, none vanish.
+    assert len(excinfo.value.errors) == 6
+    assert any("budget spent" in e for e in excinfo.value.errors)
+
+
+def test_budget_does_not_engage_on_a_healthy_outlet():
+    """Normal cost is ~22s for 中央社; the budget must never bite in that case."""
+    stubs = RSSAdapter(_outlet(n_feeds=3), _Fetcher(working={0, 1, 2})).fetch()
+    assert len(stubs) == 1

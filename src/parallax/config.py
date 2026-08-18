@@ -43,6 +43,9 @@ def load_outlets(path: Path | None = None) -> tuple[dict, list[OutletConfig]]:
                 rate_limit_seconds=float(
                     entry.get("rate_limit_seconds", defaults.get("rate_limit_seconds", 2.0))
                 ),
+                budget_seconds=float(
+                    entry.get("budget_seconds", defaults.get("budget_seconds", 180.0))
+                ),
                 verified=verified,
                 listing_url=entry.get("listing_url"),
                 article_url_pattern=entry.get("article_url_pattern"),
