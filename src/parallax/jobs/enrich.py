@@ -14,9 +14,9 @@ from ..search import find_articles
 
 log = logging.getLogger(__name__)
 
-# Shorter than this is not an article. Real bodies in this corpus run 500-1500
-# chars; the shortest legitimate one measured was 562. Set well below that so a
-# genuinely terse story is not rejected, but far above the 0-1 chars an
+# Shorter than this is not an article. Measured over the enriched corpus: bodies
+# run 447-1356 chars, 5th percentile 487. Set well below the observed minimum so
+# a genuinely terse story is not rejected, but far above the 0-1 chars an
 # unrecognised layout yields.
 _MIN_BODY_CHARS = 80
 
@@ -61,8 +61,6 @@ def enrich_keyword(keyword: str, limit: int = 200, refetch: bool = False) -> dic
                     row["seen_at"],
                     refetch=refetch,
                 )
-                stats["cached" if from_cache else "fetched"] += 1
-
                 body = extract_body(html)
                 # An empty body is a silent success, which is the failure mode
                 # this project least tolerates: enrich_state='fetched' with no
@@ -99,6 +97,11 @@ def enrich_keyword(keyword: str, limit: int = 200, refetch: bool = False) -> dic
                     db.backfill_published_at(conn, row["id"], recovered)
                     stats["dated"] += 1
 
+                # Counted only once the article is fully processed. Incrementing
+                # at fetch time meant an article that fetched and then failed
+                # extraction counted as BOTH fetched and failed, so the totals
+                # exceeded `matched` and overstated how much work succeeded.
+                stats["cached" if from_cache else "fetched"] += 1
                 conn.commit()
             except Exception as exc:  # noqa: BLE001 -- isolation is the point
                 conn.rollback()

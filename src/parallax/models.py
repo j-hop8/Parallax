@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,15 @@ class CrawlResult:
     ok: bool = False
     error: str | None = None
 
+    # Captured when the outlet's fetch begins, NOT when the row is written.
+    # crawl_runs.started_at previously took its column default, so it was set at
+    # INSERT time -- the same instant as finished_at. Every run therefore
+    # recorded a 0.0s duration, and, more importantly, started_at was really the
+    # END of the crawl. The rollup measures coverage gaps between started_at
+    # values, so a slow run shifted its own timestamp later and distorted the
+    # completeness calculation that decides whether a day may be a denominator.
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
 
 @dataclass(frozen=True)
 class OutletConfig:
@@ -40,6 +49,11 @@ class OutletConfig:
     parser: str            # "rss" | "html"
     rate_limit_seconds: float
     verified: bool
+
+    # Upper bound on wall-clock time spent on this one outlet per run. Feeds not
+    # reached within it are reported as errors, so the run is honestly degraded
+    # rather than quietly truncated.
+    budget_seconds: float = 180.0
 
     # True when the feed carries publish timestamps. False means effective_at
     # falls back to seen_at, which is only as precise as the poll interval --

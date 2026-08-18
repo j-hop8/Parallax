@@ -70,10 +70,18 @@ def record_crawl_run(conn: psycopg.Connection, result: CrawlResult) -> None:
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO crawl_runs (outlet, finished_at, items_seen, items_new, ok, error)
-            VALUES (%s, now(), %s, %s, %s, %s)
+            INSERT INTO crawl_runs
+                (outlet, started_at, finished_at, items_seen, items_new, ok, error)
+            VALUES (%s, %s, now(), %s, %s, %s, %s)
             """,
-            (result.outlet, result.items_seen, result.items_new, result.ok, result.error),
+            (
+                result.outlet,
+                result.started_at,
+                result.items_seen,
+                result.items_new,
+                result.ok,
+                result.error,
+            ),
         )
 
 
