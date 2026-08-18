@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,15 @@ class CrawlResult:
     items_new: int = 0
     ok: bool = False
     error: str | None = None
+
+    # Captured when the outlet's fetch begins, NOT when the row is written.
+    # crawl_runs.started_at previously took its column default, so it was set at
+    # INSERT time -- the same instant as finished_at. Every run therefore
+    # recorded a 0.0s duration, and, more importantly, started_at was really the
+    # END of the crawl. The rollup measures coverage gaps between started_at
+    # values, so a slow run shifted its own timestamp later and distorted the
+    # completeness calculation that decides whether a day may be a denominator.
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)

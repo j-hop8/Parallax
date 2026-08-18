@@ -259,3 +259,35 @@ def test_network_preflight_succeeds_without_waiting_when_reachable(monkeypatch):
 
     assert mod.wait_for_network(timeout=60) is True
     assert slept == [], "must not sleep when the network is already up"
+
+
+def test_crawl_runs_records_the_real_start_not_the_write_time(monkeypatch):
+    """started_at must be when the fetch began, not when the row was inserted.
+
+    It previously took the column's DEFAULT now(), so it was set at INSERT time
+    -- the same instant as finished_at. Every run recorded a 0.0s duration, and
+    started_at was in truth the END of the crawl. The rollup measures coverage
+    gaps between started_at values, so a slow run pushed its own timestamp later
+    and distorted the completeness flag that decides whether a day is usable as a
+    coverage-weight denominator.
+    """
+    import datetime as _dt
+
+    from parallax.models import CrawlResult
+
+    before = _dt.datetime.now(_dt.UTC)
+    result = CrawlResult(outlet="cna")
+    after = _dt.datetime.now(_dt.UTC)
+
+    # Stamped at construction -- i.e. when the outlet's work begins.
+    assert before <= result.started_at <= after
+    assert result.started_at.tzinfo is not None, "must be timezone-aware"
+
+    # And it is passed to the INSERT rather than left to the column default.
+    import inspect
+
+    from parallax import db
+
+    sql = inspect.getsource(db.record_crawl_run)
+    assert "started_at" in sql, "record_crawl_run must write started_at explicitly"
+    assert "result.started_at" in sql
