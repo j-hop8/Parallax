@@ -87,7 +87,9 @@ class RSSAdapter:
             if time.monotonic() > deadline:
                 # Recorded as an error, never silently dropped: unfetched feeds
                 # mean missing articles, and the run must not pass for healthy.
-                errors.append(f"{feed_url}: skipped, {self.config.budget_seconds:.0f}s budget spent")
+                errors.append(
+                    f"{feed_url}: skipped, {self.config.budget_seconds:.0f}s budget spent"
+                )
                 continue
 
             newest: datetime | None = None
