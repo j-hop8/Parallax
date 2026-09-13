@@ -202,8 +202,11 @@ class Pacer:
 _RETRY_DELAY = re.compile(r"(\d+(?:\.\d+)?)s")
 
 
-def _is_rate_limit(exc: Exception) -> bool:
-    return getattr(exc, "code", None) == 429
+def _is_transient(exc: Exception) -> bool:
+    """429 and 5xx: the free tier rate-limits, and the first live run met a
+    503 "model is experiencing high demand" -- both heal by waiting."""
+    code = getattr(exc, "code", None)
+    return code == 429 or (isinstance(code, int) and 500 <= code < 600)
 
 
 def _retry_delay(exc: Exception, attempt: int, cap: float = 120.0) -> float:
@@ -272,6 +275,9 @@ class GeminiStance:
             "response_mime_type": "application/json",
             "response_json_schema": RESPONSE_SCHEMA,
             "temperature": 0.0,
+            # No tools are declared; this only silences the SDK's warning that
+            # automatic function calling is on by default.
+            "automatic_function_calling": {"disable": True},
         }
 
     def classify(self, inp: StanceInput) -> StanceResult:
@@ -283,9 +289,14 @@ class GeminiStance:
                     model=self.model, contents=prompt, config=self._config()
                 )
             except Exception as exc:
-                if _is_rate_limit(exc) and attempt < self.max_attempts - 1:
+                if _is_transient(exc) and attempt < self.max_attempts - 1:
                     delay = _retry_delay(exc, attempt)
-                    log.warning("stance: 429 from %s; sleeping %.0fs", self.model, delay)
+                    log.warning(
+                        "stance: %s from %s; sleeping %.0fs",
+                        getattr(exc, "code", type(exc).__name__),
+                        self.model,
+                        delay,
+                    )
                     self._sleep(delay)
                     continue
                 raise

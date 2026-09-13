@@ -189,6 +189,20 @@ def test_429_without_a_hint_backs_off_exponentially_and_eventually_gives_up():
     assert slept == [10.0, 20.0], "two retries, doubling"
 
 
+def test_503_is_retried_like_a_rate_limit():
+    """The first live run met '503 model is experiencing high demand'."""
+
+    class _Unavailable(Exception):
+        code = 503
+        details = None
+
+    slept: list[float] = []
+    fake = _Fake([_Unavailable(), '{"label":"pos","confidence":0.7,"evidence":"x"}'])
+    clf = GeminiStance(model="m", rpm=0, client=fake, sleep=slept.append)
+    assert clf.classify(_inp()).label == "pos"
+    assert len(fake.calls) == 2 and slept == [10.0]
+
+
 def test_non_rate_limit_errors_propagate_without_retry():
     fake = _Fake([RuntimeError("boom")])
     clf = GeminiStance(model="m", rpm=0, client=fake, sleep=lambda s: None)
