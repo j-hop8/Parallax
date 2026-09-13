@@ -48,7 +48,7 @@ STRATA: tuple[tuple[float, float, int], ...] = (
     (0.00, 0.30, 40),
 )
 SWEEP_CONTAINMENT = (0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95)
-SWEEP_JACCARD = (0.30, 0.40, 0.50, 0.60, 0.70)
+SWEEP_JACCARD = (0.15, 0.20, 0.25, 0.30, 0.40, 0.50)
 
 
 def stratum_of(containment: float) -> str:

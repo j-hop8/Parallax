@@ -35,9 +35,13 @@ from itertools import pairwise
 MIN_FEATURES = 30  # fewer bigrams than this after boilerplate removal: not comparable
 BOILERPLATE_MIN_DOCS = 3
 BOILERPLATE_FRACTION = 0.2
-HAMMING_PREFILTER = 20  # true copies topped out at 10; the shares-source tier reaches ~23
+HAMMING_PREFILTER = (
+    26  # gold positives reach 20 (tvbs rails inflate them); <=26 still prunes 90% of pairs
+)
 CONTAINMENT_THRESHOLD = 0.85
-JACCARD_THRESHOLD = 0.5
+JACCARD_THRESHOLD = (
+    0.25  # a floor against teasers (~0.1); tvbs reprints with rails sit at 0.27-0.49
+)
 SHARES_SOURCE_THRESHOLD = 0.6  # containment tier reported, never stored
 NOISE_FLOOR = timedelta(minutes=5)  # invariant 5
 
@@ -196,7 +200,11 @@ def is_duplicate(
     jaccard: float = JACCARD_THRESHOLD,
 ) -> bool:
     """Both thresholds: containment catches wire-plus-appended-paragraph, the
-    Jaccard floor stops a teaser buried inside a long article from counting."""
+    Jaccard floor stops a teaser buried inside a long article from counting.
+
+    Tuned on eval/dup_gold.csv (118 pairs, 25 copies, 2026-09-13): at 0.85 /
+    0.25 the set scores P 1.00 R 1.00; the prototype's 0.50 floor missed seven
+    tvbs reprints whose appended related-story rails inflate the union."""
     return s.containment >= containment and s.jaccard >= jaccard
 
 

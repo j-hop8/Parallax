@@ -80,11 +80,32 @@ section-path pair is one cluster, indeterminate. Second run: 0 clusters and 0
 fingerprints changed. **"Origin" is first among tracked outlets**: the 鏡週刊
 piece shows ettoday (06:58) ahead of setn (+9m) although neither wrote it.
 
+## Gold pairs and the operating point (2026-09-13)
+
+118 pairs labeled by `claude-opus-5` (blind, stratified by containment: 25 /
+24 / 29 / 40 per stratum), 25 copies. Same provenance rule as T-007: this is
+model-labeled agreement, not the proposal's human milestone, and the eval
+prints it. At the prototype defaults (0.85 / 0.50): **P 1.00, R 0.72** -- all
+seven misses were tvbs reprints of CNA whose appended, per-article related-
+story rails inflate the union (Jaccard 0.27-0.49) and push Hamming to 20. No
+gold negative has containment >= 0.85 at any Jaccard (nearest: 0.83). The
+sweep gives a perfect plateau at containment 0.85 for Jaccard 0.15-0.25;
+defaults moved to **0.85 / 0.25, Hamming <= 26** (positives reach 20; <=26
+still prunes 90% of pairs). **P 1.00, R 1.00 in-sample** -- tuned on this
+set, so treat it as an upper bound until a held-out or human-labeled sample
+exists. Corpus grown to 478 articles (關稅, 颱風 enriched) to get 25 positives.
+
+Rebuilt at the new defaults: 14 clusters, 33 members, CNA the confident origin
+of 10; tvbs 4 follows (was 0). Second run: 0 changes.
+
 ## Knowingly not done
 
 - udn canonicalization by article id regardless of section path (`urls.py`).
 - ltn video pages: `extract_body` should return empty, not promo text.
-- tvbs related-article rail in `extract_body` (dedup masks it; stance/T-009 read raw body).
+- tvbs related-article rail in `extract_body`: each article carries a *different*
+  rail, so the per-outlet boilerplate rule cannot catch it; it cost 7 of 25
+  recall at the old Jaccard floor and still inflates Hamming. Root-cause fix is
+  in `extract.py` (T-005 lineage); stance and T-009 read the raw body too.
 - `shared_core_text`, deltas, LLM diff summary — T-009.
 
 ## Verify
