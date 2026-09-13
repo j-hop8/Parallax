@@ -297,8 +297,8 @@ def enriched_for_dedup(conn: psycopg.Connection) -> list[dict]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT ai.id, ai.outlet, ai.title, ai.effective_at, ai.published_at,
-                   a.body_seg, a.simhash, a.dup_cluster_id
+            SELECT ai.id, ai.outlet, ai.title, ai.url_original, ai.effective_at, ai.published_at,
+                   a.body, a.body_seg, a.simhash, a.dup_cluster_id
             FROM articles a
             JOIN article_index ai ON ai.id = a.id
             WHERE a.body_seg IS NOT NULL AND a.body_seg <> ''
