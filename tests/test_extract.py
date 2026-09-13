@@ -12,10 +12,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from bs4 import BeautifulSoup
 from dateutil import parser as dateparser
 
 from parallax.config import load_outlets
-from parallax.crawl.extract import extract_body, extract_published_at
+from parallax.crawl.extract import extract_body, extract_headline, extract_published_at
 
 FIXTURES = Path(__file__).parent / "fixtures" / "articles"
 OUTLETS = ["cna", "ltn", "ettoday", "udn", "chinatimes", "setn", "tvbs", "ftv"]
@@ -120,3 +121,41 @@ def test_naive_timestamp_is_read_as_taipei_not_utc():
 
 def test_datetime_type_is_returned():
     assert isinstance(extract_published_at(_html("cna")), datetime)
+
+
+# ---- headline ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("code", OUTLETS)
+def test_headline_is_the_displayed_h1_not_a_logo_or_a_lede(code: str):
+    """T-003c: the page's own headline, for the rows T-007 classifies.
+
+    Every outlet's article page carries the displayed headline in an <h1>; the
+    page <title> is that headline plus a site suffix, which makes "substring of
+    <title>" a fixture-independent check that we picked the right element.
+    """
+    html = _html(code)
+    headline = extract_headline(html)
+    assert headline, f"{code}: no headline"
+    assert len(headline) <= 60, f"{code}: {len(headline)} chars looks like a lede: {headline!r}"
+    page_title = BeautifulSoup(html, "lxml").title.get_text(" ", strip=True)
+    assert headline in page_title, f"{code}: {headline!r} not in <title> {page_title!r}"
+
+
+def test_ettoday_headline_skips_the_logo_h1():
+    assert extract_headline(_html("ettoday")) != "探索LOGO"
+    assert "游泳" in extract_headline(_html("ettoday"))
+
+
+def test_headline_falls_back_to_og_title_then_title_with_site_suffix_removed():
+    og_only = '<html><head><meta property="og:title" content="標題在這裡 | 聯合新聞網"></head><body></body></html>'
+    assert extract_headline(og_only) == "標題在這裡"
+    title_only = "<html><head><title>標題在這裡 | 政治 | 要聞 | 聯合新聞網</title></head><body></body></html>"
+    assert extract_headline(title_only) == "標題在這裡"
+    dash = "<html><head><title>標題在這裡 - 民視新聞網</title></head><body></body></html>"
+    assert extract_headline(dash) == "標題在這裡"
+
+
+def test_headline_returns_none_rather_than_guessing():
+    assert extract_headline("<html><body><p>no headline anywhere</p></body></html>") is None
+    assert extract_headline("") is None

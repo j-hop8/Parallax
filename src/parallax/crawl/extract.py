@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -138,3 +139,45 @@ def extract_body(html: str) -> str:
     paragraphs = [p.get_text(strip=True) for p in node.find_all("p")]
     text = "\n".join(p for p in paragraphs if p)
     return text or node.get_text("\n", strip=True)
+
+
+# Site names outlets append to og:title / <title>. Only consulted when a page
+# has no <h1>; the h1 is what the outlet displayed and needs no cleaning.
+_TITLE_SUFFIX = re.compile(r"\s+[|\-–—]\s+[^|\-–—]{1,40}$")
+_MAX_HEADLINE_CHARS = 120
+
+
+def extract_headline(html: str) -> str | None:
+    """The headline as the outlet displayed it, from the article page itself.
+
+    Exists because the listing crawl cannot always be trusted for it: T-003b
+    stored the lede as the title for udn and ftv for five weeks, and the rows
+    that matter most -- the enriched ones T-007 classifies, where the headline
+    is the most-weighted input -- all have their page cached.
+
+    <h1> first: on every outlet in the fixture set it is the exact displayed
+    headline. Longest wins because ettoday puts a logo in an <h1> ahead of the
+    real one. og:title is second choice (ftv rewrites it for social sharing, so
+    it is not always the displayed headline), <title> third; both carry a site
+    suffix that is stripped. Nothing found returns None rather than a guess.
+    """
+    soup = BeautifulSoup(html, "lxml")
+
+    h1s = [h.get_text(" ", strip=True) for h in soup.find_all("h1")]
+    h1s = [h for h in h1s if h and len(h) <= _MAX_HEADLINE_CHARS]
+    if h1s:
+        return max(h1s, key=len)
+
+    og = soup.find("meta", property="og:title")
+    if og and og.get("content", "").strip():
+        return _TITLE_SUFFIX.sub("", og["content"].strip()).strip() or None
+
+    if soup.title and soup.title.get_text(strip=True):
+        text = soup.title.get_text(" ", strip=True)
+        # Strip repeatedly: "<headline> | 政治 | 要聞 | 聯合新聞網".
+        previous = None
+        while text != previous:
+            previous, text = text, _TITLE_SUFFIX.sub("", text).strip()
+        return text or None
+
+    return None
