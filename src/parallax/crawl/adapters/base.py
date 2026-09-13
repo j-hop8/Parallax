@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -74,7 +75,33 @@ class RSSAdapter:
         errors: list[str] = []
         stale: list[str] = []
 
+        # One outlet must not be able to consume the whole crawl cycle. 中央社 is
+        # polled across 11 feeds; if a host accepts connections and then hangs,
+        # each request costs timeout x retries, and sequential outlets after it
+        # would be delayed or skipped entirely. Measured normal cost is ~22s for
+        # 中央社 and under two seconds for everyone else, so this budget only
+        # ever engages when something is genuinely wrong.
+        #
+        # The check runs between requests, not inside one, so the bound is soft
+        # by a single request's worst case: attempts x timeout plus backoff,
+        # ~78s at the shipped defaults. Cutting the in-flight request short would
+        # mean threading the deadline through Fetcher; instead the overshoot is
+        # bounded and test_worst_case_crawl_cycle_fits_the_launchd_interval pins
+        # that a cycle still fits even if every host hangs. It is also why only
+        # this adapter checks it: the pattern and TVBS adapters issue exactly one
+        # request, so there is nothing after the first for a budget to skip --
+        # their worst case is that same single-request bound, budget or not.
+        deadline = time.monotonic() + self.config.budget_seconds
+
         for feed_url in self.config.feed_urls:
+            if time.monotonic() > deadline:
+                # Recorded as an error, never silently dropped: unfetched feeds
+                # mean missing articles, and the run must not pass for healthy.
+                errors.append(
+                    f"{feed_url}: skipped, {self.config.budget_seconds:.0f}s budget spent"
+                )
+                continue
+
             newest: datetime | None = None
             try:
                 # Fetch through Fetcher rather than letting feedparser make its own
