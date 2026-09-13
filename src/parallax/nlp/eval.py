@@ -61,8 +61,16 @@ def macro_f1(y_true: Sequence[str], y_pred: Sequence[str], labels: Sequence[str]
 
     Unweighted so the rare classes count as much as "neu". Accuracy would let a
     classifier that only ever says neutral score well on a mostly-neutral set.
+
+    Averaged over the labels that occur in gold or predictions (scikit-learn's
+    default). A label that appears in neither -- a gold set with no `pos` rows
+    yet -- is not a zero to be averaged in; on the full three-class set the two
+    definitions coincide.
     """
-    scores = per_class(y_true, y_pred, labels)
+    present = [lab for lab in labels if lab in set(y_true) | set(y_pred)]
+    if not present:
+        return 0.0
+    scores = per_class(y_true, y_pred, present)
     return sum(s.f1 for s in scores) / len(scores)
 
 

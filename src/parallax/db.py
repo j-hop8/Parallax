@@ -263,3 +263,22 @@ def stance_by_outlet(
             (target, model, prompt_version),
         )
         return cur.fetchall()
+
+
+def articles_by_ids(conn: psycopg.Connection, ids: Iterable[int]) -> list[dict]:
+    """Enriched rows for specific ids -- what the eval needs to classify gold rows
+    that have no cached verdict yet. Rows without a body are omitted."""
+    ids = list(ids)
+    if not ids:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ai.id, ai.outlet, ai.title, ai.url_original, ai.effective_at, a.body
+            FROM article_index ai
+            JOIN articles a ON a.id = ai.id
+            WHERE ai.id = ANY(%s) AND a.body IS NOT NULL AND a.body <> ''
+            """,
+            (ids,),
+        )
+        return cur.fetchall()

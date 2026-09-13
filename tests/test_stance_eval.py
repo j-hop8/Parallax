@@ -63,3 +63,10 @@ def test_length_mismatch_is_an_error_not_a_silent_truncation():
 def test_empty_input_does_not_divide_by_zero():
     assert accuracy([], []) == 0.0
     assert macro_f1([], []) == 0.0
+
+
+def test_macro_f1_averages_over_labels_present_not_all_three():
+    """A gold set with no `pos` rows yet must not carry a phantom zero for pos."""
+    assert macro_f1(["neg", "neu"], ["neg", "neu"]) == 1.0
+    # ...but a class the model *predicted* wrongly does count, even if gold lacks it.
+    assert macro_f1(["neg", "neu"], ["neg", "pos"]) == pytest.approx((1.0 + 0.0 + 0.0) / 3)
