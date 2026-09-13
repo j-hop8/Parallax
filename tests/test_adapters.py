@@ -11,6 +11,8 @@ Refresh with scripts/fetch_fixtures.py when an outlet redesigns.
 
 from __future__ import annotations
 
+import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from parallax.crawl.adapters.html_listing import PatternListingAdapter
 from parallax.crawl.adapters.tvbs import TVBSAdapter
 
 FIXTURES = Path(__file__).parent / "fixtures"
+EXPECTED = FIXTURES / "expected"
 
 # Floor, not a target: these listings carry far more than this. A parser that
 # silently degrades to a handful of links should fail here.
@@ -75,6 +78,44 @@ def test_pattern_adapter_picks_the_headline_not_the_lede(code: str):
     assert KNOWN_HEADLINES[code] in titles, f"{code}: known headline not extracted verbatim"
     too_long = [t for t in titles if len(t) > MAX_HEADLINE_CHARS]
     assert not too_long, f"{code}: {len(too_long)} titles look like ledes, e.g. {too_long[0]!r}"
+
+
+@pytest.mark.parametrize("code", ["udn", "chinatimes", "setn", "ftv"])
+def test_pattern_adapter_output_matches_golden(code: str):
+    """The complete parse of each fixture, compared exactly.
+
+    T-003b changed the tie-break between anchors sharing a URL. A rule change
+    like that must be provably inert on the outlets it was not aimed at: setn
+    and chinatimes were byte-identical before and after, and this is what keeps
+    them so. For udn and ftv the golden is the corrected output, reviewed once.
+
+    When a fixture is refreshed (scripts/fetch_fixtures.py), regenerate with
+    PARALLAX_UPDATE_GOLDEN=1 and review the diff of the JSON like any other
+    change -- a shrinking file is the redesign these tests exist to catch.
+    """
+    stubs = PatternListingAdapter(_config(code), fetcher=None).parse(_fixture(code))
+    actual = [
+        {
+            "url": s.url_original,
+            "title": s.title,
+            "published_at": s.published_at.isoformat() if s.published_at else None,
+        }
+        for s in stubs
+    ]
+
+    golden = EXPECTED / f"{code}_listing.json"
+    if os.environ.get("PARALLAX_UPDATE_GOLDEN"):
+        golden.parent.mkdir(parents=True, exist_ok=True)
+        golden.write_text(json.dumps(actual, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    if not golden.exists():
+        pytest.fail(
+            f"missing {golden.relative_to(FIXTURES.parent)}; run with PARALLAX_UPDATE_GOLDEN=1"
+        )
+
+    expected = json.loads(golden.read_text(encoding="utf-8"))
+    assert actual == expected, (
+        f"{code}: parse differs from golden ({len(actual)} vs {len(expected)} rows)"
+    )
 
 
 def test_heading_beats_length_when_anchors_share_a_url():

@@ -36,16 +36,25 @@ UPDATE article_index
 """
 
 
+# The defect was measured at exactly these two outlets. setn and chinatimes
+# were 0% affected, and a correction script should not touch rows outside the
+# defect it exists to correct, even when the WHERE clause would make it a no-op.
+AFFECTED = ("udn", "ftv")
+
+
 def main() -> int:
-    only = sys.argv[1] if len(sys.argv) > 1 else None
+    targets = set(sys.argv[1:]) or set(AFFECTED)
+    unknown = targets - set(AFFECTED)
+    if unknown:
+        print(f"not affected by T-003b: {sorted(unknown)}; choose from {list(AFFECTED)}")
+        return 2
+
     defaults, outlets = load_outlets()
     fetcher = _build_fetcher(defaults)
 
     with db.connect() as conn:
         for outlet in outlets:
-            if outlet.parser != "pattern" or not outlet.verified:
-                continue
-            if only and outlet.code != only:
+            if outlet.code not in targets:
                 continue
             stubs = build_adapter(outlet, fetcher).fetch()
             changed = 0

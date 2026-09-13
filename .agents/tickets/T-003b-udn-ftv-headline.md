@@ -42,6 +42,8 @@ across any redesign that preserves semantic headings.
   correct `title`/`title_seg` for rows still in the listing window. Touches
   nothing else; `seen_at` and therefore `effective_at` stay as first seen.
 - `config/outlets.yaml` — comment only, recording the affected date range.
+- `tests/fixtures/expected/*_listing.json` — golden output per pattern outlet
+- this ticket file (archived to `done/` at ship)
 
 ## Do not touch
 
@@ -55,7 +57,9 @@ to the upsert. `src/parallax/nlp/**`, `src/parallax/metrics/**`.
   headlines come out verbatim (`美職聯／多倫多FC 2比1擊退新英格蘭革命　終結13場不勝`,
   `韓美明大型軍演觸及台灣？美駐韓第8軍團首提「第一島鏈投射戰力」`).
 - setn and chinatimes output is byte-identical before and after — the change
-  must not alter outlets that were already correct.
+  must not alter outlets that were already correct. Pinned by golden files:
+  the full `(url, title, published_at)` output of every pattern outlet on its
+  fixture, compared exactly.
 - ftv still recovers its listing timestamps (the datetime lives in a sibling of
   the heading, not inside it).
 - udn's trailing-time strip still applies to the headline it now selects.
