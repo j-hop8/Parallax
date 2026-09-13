@@ -93,6 +93,10 @@ outlets:
     listing_url: https://udn.com/news/breaknews/1
     article_url_pattern: '/news/story/\d+/\d+'
     strip_trailing_time: true
+    # Rows seen 2026-08-10 .. 2026-09-13 carry the story summary as `title`, not
+    # the headline (T-003b): the listing links each story from an <h2> and from
+    # a <p>, and the longer <p> text used to win. Unrecoverable without a fetch
+    # per row; title-based results over that window over-match this outlet.
     # UDN's RSS endpoints respond 200 with 20 well-formed <item> elements, but
     # every one is a hollow shell: empty <title>, empty <link>, pubDate of
     # 1970-01-01. Verified across all 11 channel ids on 2026-08-16.
@@ -145,3 +149,6 @@ outlets:
     listing_url: https://www.ftvnews.com.tw/realtime/
     article_url_pattern: '/news/detail/\w+'
     title_datetime_pattern: '^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})'
+    # Rows seen 2026-08-10 .. 2026-09-13 carry headline + summary glued together
+    # as `title` (T-003b): one anchor wraps the <h2> and the description. Same
+    # caveat as udn for title-based results over that window.
