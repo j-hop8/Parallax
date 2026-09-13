@@ -1,0 +1,185 @@
+article_id,outlet,url,target,label,annotator,labeled_at,note
+93879,setn,https://www.setn.com/news/1892847,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,adopts supporters' 洋流 framing; 黃仁勳 comparison in headline
+33186,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5544004,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,"critic's punchline in headline, no response from target"
+120672,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547963,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,"intra-party rebuke foregrounded (沒來請教), no response"
+78321,setn,https://www.setn.com/news/1892397,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,target's line is the takeaway; 竟遭藍營批評 loaded against critics; borderline neu
+146490,ftv,https://www.ftvnews.com.tw/news/detail/2026823W0132,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,高EQ回應了 in headline
+149359,ftv,https://www.ftvnews.com.tw/news/detail/2026823W0233,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,headline pushes back on the insult; defends target; borderline neu
+148965,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5549298,沈伯洋,neu,claude-opus-5,2026-09-13T04:33:03+00:00,"insult and rebuttal both given, no editorial characterization"
+148529,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5549270,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,supporters' praise (男版小英) in headline
+151918,chinatimes,https://www.chinatimes.com/realtimenews/20260823001992-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,critic's pun 沈不理 is the punchline; critic gets last word
+78766,setn,https://www.setn.com/news/1892415,沈伯洋,neu,claude-opus-5,2026-09-13T04:33:03+00:00,statement report; leans pos (一讀被擋 frames KMT as blocking)
+41975,ltn,https://news.ltn.com.tw/news/politics/paper/1767166,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,"蔣卻酸; green framing adopted, subheads from target's camp"
+142866,tvbs,https://news.tvbs.com.tw/politics/4011118,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,"flattering headline (帥男版蔡英文, 蔣沒那麼強); body calls him the weaker candidate; borderline neu"
+123065,chinatimes,https://www.chinatimes.com/realtimenews/20260821003870-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,critic's mockery is the whole article
+114166,ftv,https://www.ftvnews.com.tw/news/detail/2026821W0394,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,護駕 mocks opponents; 金句嗆爆 praises target's comeback
+152841,setn,https://www.setn.com/news/1906123,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,"sympathetic framing (遭中國通緝, bodyguards, 重要的資產); borderline neu"
+152927,ftv,https://www.ftvnews.com.tw/news/detail/2026912W0204,沈伯洋,neu,claude-opus-5,2026-09-13T04:33:03+00:00,target incidental; article is about 張景森 vs 王偉忠
+48282,ftv,https://www.ftvnews.com.tw/news/detail/2026819W0250,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,"campaign-event coverage in campaign voice (台北隊長, sunshine)"
+155665,udn,https://udn.com/news/story/124652/9751404?from=udn-ch1_breaknews-1-0-news,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,headline says 蔣 酸爆 target though the quote is mild; 引熱議 on the vest
+19516,ettoday,https://www.ettoday.net/news/20260817/3220779.htm,沈伯洋,neu,claude-opus-5,2026-09-13T04:33:03+00:00,accusation and rebuttal both at length
+144044,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548602,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,"warm event coverage, netizens 你們還要一起當選"
+153713,chinatimes,https://www.chinatimes.com/realtimenews/20260913000710-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,狠酸 in headline; mockery foregrounded despite target's rebuttal in lede
+52712,ftv,https://www.ftvnews.com.tw/news/detail/2026819W0433,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,light favorable; netizens 預祝當選
+45587,setn,https://www.setn.com/news/1891757,沈伯洋,pos,claude-opus-5,2026-09-13T04:33:03+00:00,humanizing; 人潮爆滿
+34939,udn,https://udn.com/news/story/7323/9699417?from=udn-ch1_breaknews-1-0-news,沈伯洋,neg,claude-opus-5,2026-09-13T04:33:03+00:00,bureau's 天馬行空 in headline; body entirely the rebuttal
+148573,ettoday,https://www.ettoday.net/news/20260823/3224142.htm,沈伯洋,neu,claude-opus-5,2026-09-13T04:33:03+00:00,straight insult-and-response report
+20091,tvbs,https://news.tvbs.com.tw/politics/4008589,沈伯洋,neg,claude-opus-5,2026-09-13T04:34:27+00:00,netizens' mockery + 藍委酸爆 in headline; no response from target
+46514,ftv,https://www.ftvnews.com.tw/news/detail/2026819W0173,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"enthusiastic crowd coverage (百人貪食蛇, 洋流)"
+110367,cna,https://www.cna.com.tw/news/aloc/202608210047.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:34:27+00:00,"wire copy, flat statement report"
+27395,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5543482,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,蔣酸/沈反擊 framing; target's argument at length plus camp's jab at 蔣
+141882,udn,https://udn.com/news/story/124652/9707766?from=udn-ch1_breaknews-1-0-news,沈伯洋,neg,claude-opus-5,2026-09-13T04:34:27+00:00,insult (太弱) is the headline takeaway; no response
+152921,ftv,https://www.ftvnews.com.tw/news/detail/2026912W0155,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,critic framed with 竟酸 and 反殺了; target mostly incidental; borderline neu
+152919,ftv,https://www.ftvnews.com.tw/news/detail/2026911W0560,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"momentum framing (台北要變天, 連馬英九都沒這種場面)"
+20017,chinatimes,https://www.chinatimes.com/realtimenews/20260817003486-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:34:27+00:00,fan-page and pundit mockery; 竟稱; 選舉基本已經結束
+29812,tvbs,https://news.tvbs.com.tw/politics/4008865,沈伯洋,neu,claude-opus-5,2026-09-13T04:34:27+00:00,straight policy explainer; 大禮包 mildly punchy
+155158,ftv,https://www.ftvnews.com.tw/news/detail/2026913W0162,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"洋流發威, 聲勢節節攀升, 蔣陷入爭議/急回應"
+143770,tvbs,https://news.tvbs.com.tw/politics/4011146,沈伯洋,neg,claude-opus-5,2026-09-13T04:34:27+00:00,"insult in headline, no response; 黃國昌 jab (抹紅, 蹭聲量) added"
+144239,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0402,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,headline frames the insult as hollow; netizens mock the critic
+26251,ftv,https://www.ftvnews.com.tw/news/detail/2026818W0140,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"live blurb: 聲勢上漲, 大受歡迎, 政見牛肉"
+40175,ftv,https://www.ftvnews.com.tw/news/detail/2026818P14M1,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"人氣爆棚, 盛況空前"
+59355,chinatimes,https://www.chinatimes.com/realtimenews/20260819004308-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:34:27+00:00,"綠委 epithet, 遭諷, 瞎喊/撒幣, 請勿造謠"
+42835,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5544541,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"warm human-interest, 掀熱潮"
+148613,udn,https://udn.com/news/story/124652/9708749?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:34:27+00:00,"insult and rebuttal, 認弱反擊, no editorializing"
+48524,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5544842,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"video teaser: 洋流這幕瘋傳, 民調風向變了; body is boilerplate"
+148271,ftv,https://www.ftvnews.com.tw/news/detail/2026823W0194,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"力拚斬斷連任之路, 差距縮小, 帶起洋流效應"
+141901,chinatimes,https://www.chinatimes.com/realtimenews/20260822002384-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:34:27+00:00,insult as headline takeaway; no response
+145143,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0427,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"rally coverage in campaign voice: 氣勢磅礡, 必勝"
+47295,udn,https://udn.com/news/story/124652/9700537?from=udn-ch1_breaknews-1-0-news,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"udn but favorable: 掀洋流風潮, 相當熱烈"
+28297,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5543534,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,"海外再插旗, 空前成功; logistics otherwise; borderline neu"
+153279,setn,https://www.setn.com/news/1906136,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,破百萬觀看 vs 蔣的20萬; blue camp mocked as complacent
+140594,setn,https://www.setn.com/news/1893623,沈伯洋,pos,claude-opus-5,2026-09-13T04:34:27+00:00,warm rally coverage; target one of four
+143785,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0387,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,intra-party critique plus target's response; 張 also credits him on policy
+30560,cna,https://www.cna.com.tw/news/aipl/202608180126.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,wire policy report
+108246,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547144,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,article asserts 蔣 又不正面回答 (adopts target's premise); borderline neu
+149389,cna,https://www.cna.com.tw/news/aipl/202608230061.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,"wire, insult and rebuttal"
+87471,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5546607,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,"platform report; claims attributed, not asserted; 隨口舉例 mildly diminishing"
+89360,udn,https://udn.com/news/story/124652/9704281?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,plain report; 侃侃而談; camp's boast attributed
+27527,setn,https://www.setn.com/news/1891211,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,王鴻薇 dig included; target's long response; balanced
+138822,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0246,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,重砲回擊; 蔣 mocked as 讀稿機; 殷瑋 護駕; target 不厭其煩
+96372,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5546993,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,舔共網紅 epithet on the critic; 展現超高人氣; netizens mock 館長
+79080,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5546021,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,"target framed as willing (都答應了), 蔣 as evasive; target incidental"
+80801,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5546144,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,campaign video message relayed; leans pos
+43902,ftv,https://www.ftvnews.com.tw/news/detail/2026819W0110,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,"盛況空前, 超萌, 台北市值得有一個沈伯洋"
+152918,ftv,https://www.ftvnews.com.tw/news/detail/2026911W0479,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,glowing personal portrait
+155948,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5572264,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,headline states 民調追上來了 as fact
+49958,chinatimes,https://www.chinatimes.com/realtimenews/20260819002536-260407,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,flat report of exchange; 接招
+156523,chinatimes,https://www.chinatimes.com/realtimenews/20260913001237-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:36:21+00:00,蔣萬安1句話酸爆; paid-supporters claim relayed; NOTE saw gemini verdict in smoke test
+152481,cna,https://www.cna.com.tw/news/aipl/202609120163.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:36:21+00:00,wire; headline adopts 洋流 but attributes; borderline pos
+115496,ftv,https://www.ftvnews.com.tw/news/detail/2026821W0442,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,"犀利回應, 暖心挺"
+142235,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548675,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,headline mocks the critic's logic (這也能扯？); borderline neu
+36226,chinatimes,https://www.chinatimes.com/realtimenews/20260818004089-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:36:21+00:00,"年燒, 請勿造謠, 天馬行空; bureau rebuttal is the article"
+19520,ettoday,https://www.ettoday.net/news/20260817/3220755.htm,沈伯洋,neg,claude-opus-5,2026-09-13T04:36:21+00:00,"netizens' mockery, no response"
+142780,udn,https://udn.com/news/story/124652/9707811?from=udn-ch1_breaknews-1-0-news,沈伯洋,neg,claude-opus-5,2026-09-13T04:36:21+00:00,mocker's pun in headline; 殷瑋 gets the last word
+108256,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547141,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,"attack framed as silly (一臉蛤, 陳又新 laughing); 人氣高 captions"
+52971,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5545119,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,受到支持者簇擁; 蔣 未正面回應
+27602,ftv,https://www.ftvnews.com.tw/news/detail/2026818W0212,沈伯洋,pos,claude-opus-5,2026-09-13T04:36:21+00:00,headline mocks 蔣 (想當蔣總統？); 開轟了
+156121,tvbs,https://news.tvbs.com.tw/politics/4021520,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,蔣萬安酸 in headline; appended 紅孩兒 attack
+150600,chinatimes,https://www.chinatimes.com/realtimenews/20260823001804-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,補刀一句更狠 celebrates the attack; 許甫's attack quoted at length
+149344,tvbs,https://news.tvbs.com.tw/politics/4011463,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,advice piece; flattering label but 弱勢候選人 warning too; target humble
+30981,ftv,https://www.ftvnews.com.tw/news/detail/2026818W0402,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,policy explainer with campaign language; leans pos
+145639,cna,https://www.cna.com.tw/news/aipl/202608220147.aspx,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,"wire; insult is the headline, no response yet; borderline neu"
+152922,ftv,https://www.ftvnews.com.tw/news/detail/2026911W0176,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,狂讚很聰明; 蔣萬安都快昏了
+154510,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5572132,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,criticism rebutted; article adopts the rebuttal
+51829,ftv,https://www.ftvnews.com.tw/news/detail/2026819W0389,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,蔣 突喊1句 mocked; target's rebuttal dominates and closes; borderline neu
+19680,ftv,https://www.ftvnews.com.tw/news/detail/2026817W0395,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,"聲勢上漲, 大受歡迎; schedule promo; 東發號風波 noted"
+33496,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5544070,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,"bureau's 年燒近30億 in headline; body all rebuttal incl 造謠, 天馬行空"
+38412,cna,https://www.cna.com.tw/news/aipl/202608180306.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,wire; critic's demand in headline but flat two-voice report; borderline neg
+30457,chinatimes,https://www.chinatimes.com/realtimenews/20260818002531-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,"大翻車, 認知作戰大幻想"
+108824,setn,https://www.setn.com/news/1893010,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,殷瑋 mocked (自己笑場); 蔣 屢屢不正面回答; 市民搧風
+154262,ftv,https://www.ftvnews.com.tw/news/detail/2026913W0099,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,"critique-and-proposal report, no editorial adjectives; leans pos"
+27968,setn,https://www.setn.com/news/1891234,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,logistics; camp's 空前的成功 attributed
+141717,cna,https://www.cna.com.tw/news/aloc/202608220075.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,"wire, multi-topic statements incl a critic's jab and reply"
+136662,ftv,https://www.ftvnews.com.tw/news/detail/2026821W0600,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,"聲勢上漲, 大受歡迎, 洋流"
+73974,tvbs,https://news.tvbs.com.tw/politics/4009208,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,"party-insider analysis: 基本盤沒歸隊, 表面掃街, 46.6% don't know him"
+20033,chinatimes,https://www.chinatimes.com/realtimenews/20260817003339-260407,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,accusation via 網紅 and full response
+146427,setn,https://www.setn.com/news/1893897,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,"insult and 反擊, no editorializing"
+105303,setn,https://www.setn.com/news/1892945,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,"strategy piece from green camp view; 民調有斬獲, 支持度可望上揚"
+141541,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0321,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,重話怒轟; 蔣市府螺絲鬆了？; supporters 祝福當選
+123861,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548098,沈伯洋,neu,claude-opus-5,2026-09-13T04:41:38+00:00,target incidental; article about 蘇巧慧
+119955,tvbs,https://news.tvbs.com.tw/politics/4010780,沈伯洋,neg,claude-opus-5,2026-09-13T04:41:38+00:00,"沒什麼看頭, 看不出有力道; no response"
+155003,ettoday,https://www.ettoday.net/news/20260913/3236472.htm,沈伯洋,pos,claude-opus-5,2026-09-13T04:41:38+00:00,"campaign boast relayed (驚人擴散力, 內涵與自信); netizens praise"
+152926,ftv,https://www.ftvnews.com.tw/news/detail/2026912W0149,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,百科全書式對答引爆話題; 蔣 慘遭65分; 翻盤 framing
+141345,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548518,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,target incidental; 林國漳 piece; leans pos
+155662,udn,https://udn.com/news/story/124652/9751419?from=udn-ch1_breaknews-1-0-news,沈伯洋,neg,claude-opus-5,2026-09-13T04:43:16+00:00,paid-crowd accusation is the headline; no response from target
+141484,setn,https://www.setn.com/news/1893602,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,"有機會, 帥男版蔡英文 in headline; body notes 弱勢候選人"
+62475,setn,https://www.setn.com/news/1892214,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,蔣萬安危險了？; 連中國官媒都緊張
+155154,tvbs,https://news.tvbs.com.tw/politics/4021495,沈伯洋,neg,claude-opus-5,2026-09-13T04:43:16+00:00,紅孩兒 attack in headline and body; no response
+142238,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548700,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,endorsement coverage (挺沈伯洋); target incidental
+38743,chinatimes,https://www.chinatimes.com/realtimenews/20260818004564-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:43:16+00:00,"髮夾彎, 綠委 辯稱, netizens 草包"
+55294,udn,https://udn.com/news/story/124652/9701575?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,target incidental; 蘇巧慧 piece
+84326,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5546422,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,independent councillor critiques both candidates' handouts
+96139,ftv,https://www.ftvnews.com.tw/news/detail/2026820P10M1,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,"力挺, 頻頻稱讚, 蔡英文 boost"
+111760,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547347,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,statement report; 拉抬民調 noted; leans pos
+23512,setn,https://www.setn.com/news/1891043,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,"萬安警報, 狂追13%; body more measured"
+86661,udn,https://udn.com/news/story/124652/9703990?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,plain report of campaign video
+149622,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5549364,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,妙喻 (praise); article itself criticizes 北市府 資訊不透明
+19916,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5542977,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,article turns on 蔣 (被翻出); target's jab is the takeaway
+155550,setn,https://www.setn.com/news/1906194,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,endorsement essay relayed
+147315,setn,https://www.setn.com/news/1893921,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,"gracious statement relayed, no editorializing; leans pos"
+80937,setn,https://www.setn.com/news/1892507,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,campaign message relayed
+47769,setn,https://www.setn.com/news/1891848,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,蔣's policy plus target's measured response
+152902,ftv,https://www.ftvnews.com.tw/news/detail/2026913W0070,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,"聲勢節節攀升, 民調真的追上了"
+28394,chinatimes,https://www.chinatimes.com/realtimenews/20260818002047-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:43:16+00:00,blue councillor's 分錢交差 is the takeaway
+111974,ftv,https://www.ftvnews.com.tw/news/detail/2026821W0279,沈伯洋,pos,claude-opus-5,2026-09-13T04:43:16+00:00,target's jab celebrated (一句話酸爆); 熱情歡迎
+111904,setn,https://www.setn.com/news/1893097,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,same event as 147315; 聲援 is a neutral verb
+106928,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547125,沈伯洋,neu,claude-opus-5,2026-09-13T04:43:16+00:00,statement report; 新市長來了 crowd note; leans pos
+29409,cna,https://www.cna.com.tw/news/aipl/202608180090.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,wire; opposition question and camp's jab both included
+149093,setn,https://www.setn.com/news/1893952,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,plain report
+138635,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548497,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,"為選情添強運, 引爆全場熱烈歡呼"
+152450,ftv,https://www.ftvnews.com.tw/news/detail/2026823W0315,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,fan anecdote; 忍俊不禁; borderline neu
+156116,tvbs,https://news.tvbs.com.tw/politics/4021522,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,"展現破圈擴散力, 侃侃而談; NOTE saw gemini verdict in smoke test"
+152720,ltn,https://news.ltn.com.tw/news/politics/paper/1770446,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,"洋流正式在東京匯聚, 三百人座位馬上額滿"
+39497,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5544452,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,許願成真; warm crowd coverage
+144031,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548802,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,video teaser: 百位律師發聲挺
+23042,chinatimes,https://www.chinatimes.com/realtimenews/20260817003760-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:44:33+00:00,"mockery compilation: 迴力鏢, 自打臉, 綠委"
+115819,udn,https://udn.com/news/story/124652/9706065?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,蔣's response to a characterized strategy
+28421,setn,https://www.setn.com/news/1891188,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,policy explainer with target's critique of 青年局
+27916,udn,https://udn.com/news/story/6656/9698355?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,plain report
+84969,ftv,https://www.ftvnews.com.tw/news/detail/2026820W0516,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,"人氣爆棚; 蔣 mocked (垮褲, 冷氣房)"
+155663,udn,https://udn.com/news/story/124652/9751416?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,camp's claim questioned (?); 蔣's platform at length; leans neg
+29374,ftv,https://www.ftvnews.com.tw/news/detail/2026818W0321,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,硬起來 approves the executive; target a commenter; leans pos
+148255,tvbs,https://news.tvbs.com.tw/politics/4011360,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,insult and rebuttal
+35867,udn,https://udn.com/news/story/124652/9699417?from=udn-ch1_breaknews-1-0-news,沈伯洋,neg,claude-opus-5,2026-09-13T04:44:33+00:00,"duplicate of 34939: 天馬行空, bureau rebuttal is the article"
+155177,ftv,https://www.ftvnews.com.tw/news/detail/2026913W0140,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,竟嗆; rebuttal foregrounded; 鄭 mocked (先照鏡子)
+117518,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547739,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,蔣's response; 市政遭批斷層 states the critique happened
+28458,tvbs,https://news.tvbs.com.tw/politics/4008831,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,headline 剛訪美又要出國 insinuates absence; body neutral; borderline neg
+62539,ftv,https://www.ftvnews.com.tw/news/detail/2026819P11M1,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,人氣爆棚; 蔣 mocked as 寶立達B
+80491,chinatimes,https://www.chinatimes.com/realtimenews/20260820001367-260407,沈伯洋,neu,claude-opus-5,2026-09-13T04:44:33+00:00,balanced analysis: 兩大罩門 vs 蔣 under pressure
+112404,ftv,https://www.ftvnews.com.tw/news/detail/2026821W0325,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,"出大招, 選情上升, 民調有斬獲"
+138371,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0215,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,target's jab celebrated (酸爆); 傅 mocked
+155101,setn,https://www.setn.com/news/1906168,沈伯洋,pos,claude-opus-5,2026-09-13T04:44:33+00:00,已產生外溢效果; 130萬 vs 20萬
+38836,ftv,https://www.ftvnews.com.tw/news/detail/2026818W0668,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,green pundit praises (磁吸效應); 蔣 摳
+52529,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5545078,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,蔣 不甘示弱 framed as reacting; target's response relayed; leans pos
+48623,udn,https://udn.com/news/story/124652/9700742?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,report of exchange; 場面相當熱; leans pos
+27548,setn,https://www.setn.com/news/1891214,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,起風了; pundit encouragement; 知名度 gap noted
+79492,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5546060,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,"legislative Q&A; target as legislator, incidental"
+145875,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5549098,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,已有效牽制蔣; 民調拉近; insiders' favorable analysis
+49095,setn,https://www.setn.com/news/1891906,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,蔣 竟稱 mocked; target's critique adopted
+20003,udn,https://udn.com/news/story/124984/9697054?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,both sides at length; 王鴻薇 attack and target's response
+124447,setn,https://www.setn.com/news/1893396,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,"strategy analysis: 蔣萬安危機, target finding new voters"
+152840,setn,https://www.setn.com/news/1906126,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,狂吸130萬; approving body-language read
+142435,ftv,https://www.ftvnews.com.tw/news/detail/2026822W0348,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,"回擊, 開酸; target's rebuttal is the whole piece; borderline neu"
+152442,ftv,https://www.ftvnews.com.tw/news/detail/2026823W0316,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,humanizing anecdote
+88052,setn,https://www.setn.com/news/1892739,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,蔣 又不正面回答 asserted; 痛批
+59696,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5545397,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,"target's argument relayed, no adjectives; leans pos"
+105212,ettoday,https://www.ettoday.net/news/20260821/3223003.htm,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,same 鏡週刊 piece as 105303
+150486,ltn,https://ent.ltn.com.tw/news/breakingnews/5549427,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,rebuttal to insult foregrounded (柯是那很弱的1%)
+55190,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5545280,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,light; netizens 情緒穩定的市長
+58347,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5545424,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,常被嘲諷問A答B asserted; 無奈 sympathetic; borderline neu
+155110,setn,https://www.setn.com/news/1906169,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,glowing pundit piece (選局質變)
+149051,udn,https://udn.com/news/story/124652/9708786?from=udn-ch1_breaknews-1-0-news,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,急喊 mildly mocking; otherwise plain
+150478,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5549433,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,defends anecdote against staging accusation; sympathetic
+48284,ftv,https://www.ftvnews.com.tw/news/detail/2026819W0248,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,蔣萬安嚇到了？; 竟搬這人擋槍
+145980,setn,https://www.setn.com/news/1893898,沈伯洋,pos,claude-opus-5,2026-09-13T04:45:50+00:00,"admiring (有夠聰明, 逼到牆角)"
+106500,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5547113,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,statement report
+109749,tvbs,https://news.tvbs.com.tw/politics/4010447,沈伯洋,neu,claude-opus-5,2026-09-13T04:45:50+00:00,flatter report of the 洋逃 exchange
+155181,ftv,https://www.ftvnews.com.tw/news/detail/2026913W0139,沈伯洋,pos,claude-opus-5,2026-09-13T04:46:37+00:00,"對答如流, 聲勢大漲, 蔣 慘遭超車"
+116757,setn,https://www.setn.com/news/1893224,沈伯洋,pos,claude-opus-5,2026-09-13T04:46:37+00:00,target's view 引發網友共鳴; 是真的宅宅 affectionate; borderline neu
+91201,setn,https://www.setn.com/news/1892811,沈伯洋,pos,claude-opus-5,2026-09-13T04:46:37+00:00,"TV report: 掀起洋流, 民眾攔截搶拍照; borderline neu"
+109328,ftv,https://www.ftvnews.com.tw/news/detail/2026821W0169,沈伯洋,neu,claude-opus-5,2026-09-13T04:46:37+00:00,KMT infighting piece; target incidental beneficiary
+109687,chinatimes,https://www.chinatimes.com/realtimenews/20260821000081-260407,沈伯洋,neg,claude-opus-5,2026-09-13T04:46:37+00:00,綠營動員...應援景象 asserted as staged; 青鳥竟喊; 選情差到提前玩這招
+144045,ltn,https://news.ltn.com.tw/news/politics/breakingnews/5548778,沈伯洋,pos,claude-opus-5,2026-09-13T04:46:37+00:00,headline encouragement; 沈伯洋加油
+148563,ettoday,https://www.ettoday.net/news/20260823/3224150.htm,沈伯洋,neu,claude-opus-5,2026-09-13T04:46:37+00:00,plain report
+30205,setn,https://www.setn.com/news/1891306,沈伯洋,neu,claude-opus-5,2026-09-13T04:46:37+00:00,target's position relayed (反批)
+152489,cna,https://www.cna.com.tw/news/aipl/202609120099.aspx,沈伯洋,neu,claude-opus-5,2026-09-13T04:46:37+00:00,wire
