@@ -79,8 +79,18 @@ class RSSAdapter:
         # polled across 11 feeds; if a host accepts connections and then hangs,
         # each request costs timeout x retries, and sequential outlets after it
         # would be delayed or skipped entirely. Measured normal cost is ~22s for
-        # 中央社 and under a second for everyone else, so this budget only ever
-        # engages when something is genuinely wrong.
+        # 中央社 and under two seconds for everyone else, so this budget only
+        # ever engages when something is genuinely wrong.
+        #
+        # The check runs between requests, not inside one, so the bound is soft
+        # by a single request's worst case: attempts x timeout plus backoff,
+        # ~78s at the shipped defaults. Cutting the in-flight request short would
+        # mean threading the deadline through Fetcher; instead the overshoot is
+        # bounded and test_worst_case_crawl_cycle_fits_the_launchd_interval pins
+        # that a cycle still fits even if every host hangs. It is also why only
+        # this adapter checks it: the pattern and TVBS adapters issue exactly one
+        # request, so there is nothing after the first for a budget to skip --
+        # their worst case is that same single-request bound, budget or not.
         deadline = time.monotonic() + self.config.budget_seconds
 
         for feed_url in self.config.feed_urls:

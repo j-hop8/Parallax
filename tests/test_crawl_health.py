@@ -332,3 +332,56 @@ def test_budget_does_not_engage_on_a_healthy_outlet():
     """Normal cost is ~22s for 中央社; the budget must never bite in that case."""
     stubs = RSSAdapter(_outlet(n_feeds=3), _Fetcher(working={0, 1, 2})).fetch()
     assert len(stubs) == 1
+
+
+def test_worst_case_crawl_cycle_fits_the_launchd_interval():
+    """Even if every host accepts connections and then hangs, one cycle must
+    finish before launchd fires the next.
+
+    The per-outlet budget is checked between requests, not inside one, so it is
+    soft by a single request's worst case (attempts x timeout plus backoff).
+    Pattern and TVBS adapters issue exactly one request, so that single-request
+    cost IS their worst case, budget or not. This does the arithmetic from the
+    shipped config, the Fetcher's retry defaults and the plist template, so
+    raising budget_seconds, timeout_seconds or the feed count past the point
+    where a hung cycle overlaps the next one fails here rather than in
+    production, where the cost is tier-1 data that cannot be re-fetched.
+    """
+    import inspect
+    import re
+    from pathlib import Path
+
+    from parallax.config import load_outlets
+    from parallax.crawl.http import Fetcher, wait_for_network
+
+    defaults, outlets = load_outlets()
+    get_params = inspect.signature(Fetcher.get).parameters
+    retries = get_params["retries"].default
+    backoff = get_params["backoff"].default
+    timeout = float(defaults["timeout_seconds"])
+    rate_limit = float(defaults["rate_limit_seconds"])
+
+    # One request that times out on every attempt: each attempt pays the rate
+    # limit and the full timeout, and each retry pays its backoff.
+    worst_request = (retries + 1) * (rate_limit + timeout) + sum(
+        backoff * (i + 1) for i in range(retries)
+    )
+
+    # The upfront network wait runs once per cycle before any outlet.
+    total = float(inspect.signature(wait_for_network).parameters["timeout"].default)
+    for outlet in outlets:
+        if not outlet.verified:
+            continue
+        n_requests = len(outlet.feed_urls) if outlet.parser == "rss" else 1
+        # Sequential requests until the budget is spent, plus the one in flight.
+        total += min(n_requests * worst_request, outlet.budget_seconds + worst_request)
+
+    plist = Path(__file__).resolve().parents[1] / "ops" / "com.parallax.crawl.plist.template"
+    match = re.search(r"<key>StartInterval</key>\s*<integer>(\d+)</integer>", plist.read_text())
+    assert match, "StartInterval not found in the plist template"
+    interval = int(match.group(1))
+
+    assert total < interval, (
+        f"a fully hung cycle takes {total:.0f}s against a {interval}s interval; "
+        "lower budget_seconds or timeout_seconds, or the feed count"
+    )

@@ -93,16 +93,21 @@ def enrich_keyword(keyword: str, limit: int = 200, refetch: bool = False) -> dic
                 # Only fill a timestamp we do not already have. An outlet that
                 # publishes one in its feed is the better source: it was recorded
                 # at publication, not scraped from rendered markup later.
-                if recovered and row["published_at"] is None:
+                dated = bool(recovered) and row["published_at"] is None
+                if dated:
                     db.backfill_published_at(conn, row["id"], recovered)
-                    stats["dated"] += 1
 
-                # Counted only once the article is fully processed. Incrementing
-                # at fetch time meant an article that fetched and then failed
-                # extraction counted as BOTH fetched and failed, so the totals
-                # exceeded `matched` and overstated how much work succeeded.
-                stats["cached" if from_cache else "fetched"] += 1
                 conn.commit()
+
+                # Counted only after the commit. Incrementing at fetch time meant
+                # an article that fetched and then failed extraction counted as
+                # BOTH fetched and failed; incrementing before the commit left
+                # the same double count open one step later, when the commit
+                # itself failed. Either way the totals exceeded `matched` and
+                # overstated how much work succeeded.
+                stats["cached" if from_cache else "fetched"] += 1
+                if dated:
+                    stats["dated"] += 1
             except Exception as exc:  # noqa: BLE001 -- isolation is the point
                 conn.rollback()
                 stats["failed"] += 1

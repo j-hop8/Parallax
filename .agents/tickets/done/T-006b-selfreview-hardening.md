@@ -17,7 +17,7 @@ how it was found.
 - `src/parallax/crawl/adapters/base.py`
 - `src/parallax/jobs/enrich.py`
 - `config/outlets.yaml`
-- `tests/test_crawl_health.py`
+- `tests/test_crawl_health.py`, `tests/test_enrich.py` (added in review round 1)
 
 ## Do not touch
 
@@ -56,7 +56,8 @@ how it was found.
   never silently dropped, so the run stays honestly degraded.
 - The budget does not engage on healthy outlets (headroom: 中央社 23.3s against
   180s; every other outlet under 0.5s).
-- `fetched + cached + failed` never exceeds `matched`.
+- `fetched + cached + failed` never exceeds `matched` — including when the commit itself fails.
+- A cycle in which every host hangs still finishes inside the 20-minute launchd interval (budget is soft by one request's worst case; the test does the arithmetic from live config).
 - Comments state only measurements that were actually taken.
 
 ## Knowingly not done

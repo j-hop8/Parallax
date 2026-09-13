@@ -50,9 +50,10 @@ class OutletConfig:
     rate_limit_seconds: float
     verified: bool
 
-    # Upper bound on wall-clock time spent on this one outlet per run. Feeds not
-    # reached within it are reported as errors, so the run is honestly degraded
-    # rather than quietly truncated.
+    # Wall-clock budget for this one outlet per run, checked between feed
+    # requests -- so soft by one request's worst case, not a hard ceiling. Feeds
+    # not reached within it are reported as errors, so the run is honestly
+    # degraded rather than quietly truncated.
     budget_seconds: float = 180.0
 
     # True when the feed carries publish timestamps. False means effective_at
