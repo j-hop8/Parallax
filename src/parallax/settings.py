@@ -56,10 +56,11 @@ TIMEZONE = "Asia/Taipei"
 # rather than showing a noisy one.
 MIN_DAILY_DENOMINATOR = 20
 
-# Q1 stance classifier (T-007). The model must show a free tier on the user's
-# AI Studio account; limits are per-account and unpublished, so the client
-# paces itself to STANCE_RPM and backs off on 429 rather than assuming a quota.
-# 5/min is deliberately under any free tier -- raise it after checking
-# https://aistudio.google.com/rate-limit, not before.
-STANCE_MODEL = os.environ.get("STANCE_MODEL", "gemini-3.8-flash")
-STANCE_RPM = float(os.environ.get("STANCE_RPM", "5"))
+# Q1 stance classifier (T-007). Free-tier quotas are per model and per day and
+# no longer published; measured 2026-09-13: gemini-3.8-flash allows 20
+# requests/day (useless for a 184-article keyword), gemini-3.5-flash-lite ran
+# 184 at 15/min with no 429. The client paces itself to STANCE_RPM and backs
+# off on 429; a per-day quota stops the run cleanly. Check your own limits at
+# https://aistudio.google.com/rate-limit before raising either value.
+STANCE_MODEL = os.environ.get("STANCE_MODEL", "gemini-3.5-flash-lite")
+STANCE_RPM = float(os.environ.get("STANCE_RPM", "10"))

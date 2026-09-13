@@ -70,6 +70,20 @@ cache key does not include it, so the **live stance run must follow T-003c**
 (recover the headline from the cached article HTML; all 200 pages are in
 `raw/`). Everything else in this ticket is independent of that.
 
+## Outcome (2026-09-13)
+
+- Gold set: 184 沈伯洋 articles labeled by `claude-opus-5` at the project
+  owner's decision (blind, notes on borderline calls). The eval report prints
+  this next to the F1; it is inter-model agreement, not human validation.
+- `gemini-3.8-flash` free tier is 20 requests/day -- unusable. Default moved to
+  `gemini-3.5-flash-lite`: 184/184 classified, 0 failed, 98% evidence verbatim.
+- **Macro-F1 0.733** (target 0.75), accuracy 0.72. neg 0.85 / pos 0.75 /
+  **neu 0.60**. Polarity flips: 3 of 184. 43 of 52 disagreements are neu<->pos,
+  split both ways -- the two models place the "favorable framing" line
+  differently. That is the prompt-v2 / annotation-guide item, not a model swap.
+- Per-outlet lean is the same ordering under both models (chinatimes -0.71,
+  ftv +0.76, cna/ettoday/udn/tvbs near zero, ltn/setn strongly positive).
+
 ## Knowingly not done
 
 - BERT distillation → T-007b once the approach clears 0.75.
