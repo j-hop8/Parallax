@@ -282,3 +282,131 @@ def articles_by_ids(conn: psycopg.Connection, ids: Iterable[int]) -> list[dict]:
             (ids,),
         )
         return cur.fetchall()
+
+
+# ---- Q3: near-duplicate clusters -------------------------------------------
+
+
+def enriched_for_dedup(conn: psycopg.Connection) -> list[dict]:
+    """Every article with a segmented body: the whole tier-2 corpus.
+
+    Clusters are corpus-wide, not keyword-wide -- a wire copy matches whatever
+    keywords it matches, and an article enriched for one keyword can be the
+    origin of a cluster found under another.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ai.id, ai.outlet, ai.title, ai.effective_at, ai.published_at,
+                   a.body_seg, a.simhash, a.dup_cluster_id
+            FROM articles a
+            JOIN article_index ai ON ai.id = a.id
+            WHERE a.body_seg IS NOT NULL AND a.body_seg <> ''
+            ORDER BY ai.id
+            """
+        )
+        return cur.fetchall()
+
+
+def save_fingerprint(
+    conn: psycopg.Connection, article_id: int, simhash_signed: int, bands: tuple[int, int, int, int]
+) -> int:
+    """Write the SimHash and its bands. Returns 1 if anything changed, else 0,
+    so a re-run can prove it was a no-op."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE articles
+               SET simhash = %(h)s, band0 = %(b0)s, band1 = %(b1)s, band2 = %(b2)s, band3 = %(b3)s
+             WHERE id = %(id)s
+               AND (simhash IS DISTINCT FROM %(h)s OR band0 IS DISTINCT FROM %(b0)s
+                    OR band1 IS DISTINCT FROM %(b1)s OR band2 IS DISTINCT FROM %(b2)s
+                    OR band3 IS DISTINCT FROM %(b3)s)
+            """,
+            {
+                "id": article_id,
+                "h": simhash_signed,
+                "b0": bands[0],
+                "b1": bands[1],
+                "b2": bands[2],
+                "b3": bands[3],
+            },
+        )
+        return cur.rowcount
+
+
+def replace_clusters(
+    conn: psycopg.Connection, clusters: list, scope_ids: list[int]
+) -> dict[str, int]:
+    """Make the stored clusters equal to `clusters` for the articles in scope.
+
+    Full replacement, in one transaction the caller commits: members in scope
+    are detached, clusters that no longer exist are deleted, the rest are
+    upserted by their stable id (min member id) and members re-attached with
+    rank and origin. shared_core_text is left alone -- T-009 owns it.
+    Returns change counts; a second identical run reports all zeros except
+    'members_set', which is the number of members re-attached.
+    """
+    counts = {"clusters_upserted": 0, "clusters_deleted": 0, "members_set": 0}
+    keep_ids = [c.cluster_id for c in clusters]
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE articles
+               SET dup_cluster_id = NULL, is_cluster_origin = FALSE, cluster_rank = NULL
+             WHERE id = ANY(%s)
+            """,
+            (scope_ids,),
+        )
+        cur.execute(
+            """
+            DELETE FROM dup_clusters
+             WHERE NOT (cluster_id = ANY(%s))
+               AND NOT EXISTS (SELECT 1 FROM articles WHERE dup_cluster_id = dup_clusters.cluster_id)
+            """,
+            (keep_ids,),
+        )
+        counts["clusters_deleted"] = cur.rowcount
+
+        for c in clusters:
+            cur.execute(
+                """
+                INSERT INTO dup_clusters
+                    (cluster_id, member_count, origin_article_id, first_published_at,
+                     origin_confident, computed_at)
+                VALUES (%(id)s, %(n)s, %(origin)s, %(first)s, %(conf)s, now())
+                ON CONFLICT (cluster_id) DO UPDATE
+                    SET member_count = EXCLUDED.member_count,
+                        origin_article_id = EXCLUDED.origin_article_id,
+                        first_published_at = EXCLUDED.first_published_at,
+                        origin_confident = EXCLUDED.origin_confident,
+                        computed_at = now()
+                  WHERE dup_clusters.member_count IS DISTINCT FROM EXCLUDED.member_count
+                     OR dup_clusters.origin_article_id IS DISTINCT FROM EXCLUDED.origin_article_id
+                     OR dup_clusters.first_published_at IS DISTINCT FROM EXCLUDED.first_published_at
+                     OR dup_clusters.origin_confident IS DISTINCT FROM EXCLUDED.origin_confident
+                """,
+                {
+                    "id": c.cluster_id,
+                    "n": len(c.members),
+                    "origin": c.origin.article_id,
+                    "first": c.first_published_at,
+                    "conf": c.origin_confident,
+                },
+            )
+            counts["clusters_upserted"] += cur.rowcount
+            for rank, m in enumerate(c.members, 1):
+                cur.execute(
+                    """
+                    UPDATE articles
+                       SET dup_cluster_id = %s, is_cluster_origin = %s, cluster_rank = %s
+                     WHERE id = %s
+                    """,
+                    (c.cluster_id, rank == 1, rank, m.article_id),
+                )
+                counts["members_set"] += cur.rowcount
+        # Keep the sequence ahead of explicit ids so nothing else ever collides.
+        cur.execute(
+            "SELECT setval('dup_clusters_cluster_id_seq', GREATEST((SELECT COALESCE(MAX(cluster_id), 0) FROM dup_clusters), 1))"
+        )
+    return counts

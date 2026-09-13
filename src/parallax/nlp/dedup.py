@@ -14,6 +14,11 @@ before any of this was written (T-008 ticket):
   text and comment policy. Left in, an outlet's own articles cluster with each
   other on their furniture.
 
+"Origin" means first among the outlets this project crawls. When the real
+author is outside that set -- a magazine both ettoday and setn reprinted nine
+minutes apart, an agency we do not track -- the origin shown is the first
+tracked reprint. CNA is tracked, so a cna -> ltn cluster is a genuine origin.
+
 Everything here is pure: fingerprints in, clusters out. Persistence is in db.py
 and jobs/dedup.py.
 """
@@ -30,7 +35,7 @@ from itertools import pairwise
 MIN_FEATURES = 30  # fewer bigrams than this after boilerplate removal: not comparable
 BOILERPLATE_MIN_DOCS = 3
 BOILERPLATE_FRACTION = 0.2
-HAMMING_PREFILTER = 12
+HAMMING_PREFILTER = 20  # true copies topped out at 10; the shares-source tier reaches ~23
 CONTAINMENT_THRESHOLD = 0.85
 JACCARD_THRESHOLD = 0.5
 SHARES_SOURCE_THRESHOLD = 0.6  # containment tier reported, never stored

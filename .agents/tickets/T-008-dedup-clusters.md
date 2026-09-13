@@ -72,6 +72,14 @@ Target (proposal §9): precision > 0.90, recall > 0.80 on 200 labeled pairs.
   printed beside the numbers (T-007 provenance rule applies).
 - No `metrics/` code; no schema change.
 
+## Live (2026-09-13, 208 enriched articles)
+
+5 clusters, 14 shares-source pairs, 2 too-short, tvbs clusters with nothing.
+cna→ltn 哥倫比亞 = cluster 45, origin cna, confident, +2h49m. The udn
+section-path pair is one cluster, indeterminate. Second run: 0 clusters and 0
+fingerprints changed. **"Origin" is first among tracked outlets**: the 鏡週刊
+piece shows ettoday (06:58) ahead of setn (+9m) although neither wrote it.
+
 ## Knowingly not done
 
 - udn canonicalization by article id regardless of section path (`urls.py`).
