@@ -61,6 +61,15 @@ target.
   without the `llm` extra.
 - Live: 沈伯洋 shows a distribution across all 8 outlets.
 
+## Sequencing note (found during live verification)
+
+Of the 200 enriched 沈伯洋 articles, 68 (53 ftv, 15 udn) still carry the
+T-003b lede-as-title text -- they were indexed before that fix and the upsert is
+first-sight-wins. The headline is the classifier's most-weighted input and the
+cache key does not include it, so the **live stance run must follow T-003c**
+(recover the headline from the cached article HTML; all 200 pages are in
+`raw/`). Everything else in this ticket is independent of that.
+
 ## Knowingly not done
 
 - BERT distillation → T-007b once the approach clears 0.75.
