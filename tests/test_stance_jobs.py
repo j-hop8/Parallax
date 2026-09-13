@@ -93,6 +93,7 @@ def test_classifies_only_what_is_not_cached_and_counts_after_commit(fakedb, monk
         "classified": 2,
         "failed": 0,
         "evidence_verbatim": 1,  # 'lede 1' is in article 1's text, not article 3's
+        "quota_exhausted": 0,
     }
     assert conn.commits == 2
     assert store[(1, "沈伯洋", "fake-model", "v1")]["label"] == "neg"
@@ -121,6 +122,22 @@ def test_one_failure_is_isolated_and_the_batch_continues(fakedb, monkeypatch):
     assert stats["classified"] + stats["failed"] == stats["planned"]
     assert conn.rollbacks == 1 and conn.commits == 2
     assert (2, "沈伯洋", "fake-model", "v1") not in store
+
+
+def test_daily_quota_stops_the_run_and_leaves_the_rest_pending(fakedb, monkeypatch):
+    from parallax.nlp.stance import DailyQuotaExhausted
+
+    store, conn = fakedb
+    rows = [_row(1), _row(2), _row(3), _row(4)]
+    monkeypatch.setattr(job.db, "find_enriched_articles", lambda c, kw, limit: rows)
+    clf = _Classifier({1: "neg", 2: DailyQuotaExhausted("m", "PerDay", "20"), 3: "pos", 4: "pos"})
+
+    stats = job.classify_keyword("沈伯洋", clf)
+
+    assert [c.article_id for c in clf.calls] == [1, 2], "must stop at the quota, not try 3 and 4"
+    assert stats["classified"] == 1 and stats["failed"] == 0 and stats["quota_exhausted"] == 1
+    assert (2, "沈伯洋", "fake-model", "v1") not in store, "nothing cached for the quota hit"
+    assert conn.rollbacks == 1
 
 
 def test_the_classifier_never_sees_the_outlet(fakedb, monkeypatch):

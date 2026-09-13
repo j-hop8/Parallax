@@ -17,7 +17,13 @@ import sys
 from collections.abc import Callable
 
 from .. import db
-from ..nlp.stance import PROMPT_VERSION, GeminiStance, StanceClassifier, stance_input
+from ..nlp.stance import (
+    PROMPT_VERSION,
+    DailyQuotaExhausted,
+    GeminiStance,
+    StanceClassifier,
+    stance_input,
+)
 from ..settings import STANCE_MODEL, STANCE_RPM
 
 log = logging.getLogger(__name__)
@@ -45,6 +51,7 @@ def classify_keyword(
         "classified": 0,
         "failed": 0,
         "evidence_verbatim": 0,
+        "quota_exhausted": 0,  # 1 when the run stopped early on a daily quota
     }
     # Resolved here, not in the signature: a default bound at import time would
     # pin the original db.connect and quietly ignore anything patched over it.
@@ -79,6 +86,17 @@ def classify_keyword(
                     evidence=result.evidence,
                 )
                 conn.commit()
+            except DailyQuotaExhausted as exc:
+                # Not an article failure: nothing was cached, so the remaining
+                # rows are simply still pending. Stop instead of failing each.
+                conn.rollback()
+                stats["quota_exhausted"] = 1
+                log.error(
+                    "%s -- %d article(s) left unclassified",
+                    exc,
+                    stats["planned"] - stats["classified"] - stats["failed"],
+                )
+                break
             except Exception as exc:  # noqa: BLE001 -- isolation is the point
                 conn.rollback()
                 stats["failed"] += 1
@@ -130,13 +148,15 @@ def main(argv: list[str] | None = None) -> int:
     classifier = GeminiStance(model=args.model, rpm=args.rpm)
     stats = classify_keyword(args.keyword, classifier, limit=args.limit, dry_run=args.dry_run)
     log.info(
-        "matched=%d cached=%d planned=%d classified=%d failed=%d evidence_verbatim=%d model=%s prompt=%s",
+        "matched=%d cached=%d planned=%d classified=%d failed=%d evidence_verbatim=%d "
+        "quota_exhausted=%d model=%s prompt=%s",
         stats["matched"],
         stats["cached"],
         stats["planned"],
         stats["classified"],
         stats["failed"],
         stats["evidence_verbatim"],
+        stats["quota_exhausted"],
         args.model,
         PROMPT_VERSION,
     )

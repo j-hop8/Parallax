@@ -63,6 +63,24 @@ class StanceClassifier(Protocol):
     def classify(self, inp: StanceInput) -> StanceResult: ...
 
 
+class DailyQuotaExhausted(RuntimeError):
+    """The model's per-day free-tier quota is spent. Waiting a minute will not
+    help and neither will the next article; callers should stop the run.
+
+    Learned live: gemini-3.8-flash allows 20 requests/day on the free tier
+    (quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier). Without this
+    the job retried each remaining article through its full backoff and
+    recorded 170+ failures for nothing.
+    """
+
+    def __init__(self, model: str, quota_id: str, quota_value: str | None) -> None:
+        self.model, self.quota_id, self.quota_value = model, quota_id, quota_value
+        limit = f" (limit {quota_value}/day)" if quota_value else ""
+        super().__init__(
+            f"{model}: daily quota exhausted{limit}; stop and resume tomorrow or switch model"
+        )
+
+
 # ---- text preparation ------------------------------------------------------
 
 
@@ -202,6 +220,18 @@ class Pacer:
 _RETRY_DELAY = re.compile(r"(\d+(?:\.\d+)?)s")
 
 
+def _daily_quota(exc: Exception) -> tuple[str, str | None] | None:
+    """(quotaId, quotaValue) when a 429 is a per-day quota, else None."""
+    if getattr(exc, "code", None) != 429:
+        return None
+    for entry in _walk(getattr(exc, "details", None)):
+        if isinstance(entry, dict) and "PerDay" in str(entry.get("quotaId", "")):
+            return str(entry["quotaId"]), (
+                str(entry["quotaValue"]) if "quotaValue" in entry else None
+            )
+    return None
+
+
 def _is_transient(exc: Exception) -> bool:
     """429 and 5xx: the free tier rate-limits, and the first live run met a
     503 "model is experiencing high demand" -- both heal by waiting."""
@@ -289,6 +319,9 @@ class GeminiStance:
                     model=self.model, contents=prompt, config=self._config()
                 )
             except Exception as exc:
+                daily = _daily_quota(exc)
+                if daily is not None:
+                    raise DailyQuotaExhausted(self.model, *daily) from exc
                 if _is_transient(exc) and attempt < self.max_attempts - 1:
                     delay = _retry_delay(exc, attempt)
                     log.warning(

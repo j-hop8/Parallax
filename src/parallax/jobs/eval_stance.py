@@ -23,7 +23,13 @@ from datetime import UTC, datetime
 from .. import db
 from ..nlp.eval import LABELS, accuracy, confusion, macro_f1, per_class
 from ..nlp.gold import GOLD_PATH, GoldRow, load_gold
-from ..nlp.stance import PROMPT_VERSION, GeminiStance, StanceClassifier, stance_input
+from ..nlp.stance import (
+    PROMPT_VERSION,
+    DailyQuotaExhausted,
+    GeminiStance,
+    StanceClassifier,
+    stance_input,
+)
 from ..settings import EVAL_DIR, ROOT, STANCE_MODEL, STANCE_RPM
 
 log = logging.getLogger(__name__)
@@ -140,6 +146,10 @@ def _fill_missing(conn, gold: list[GoldRow], classifier: StanceClassifier) -> in
             )
             conn.commit()
             done += 1
+        except DailyQuotaExhausted as exc:
+            conn.rollback()
+            log.error("%s -- scoring what is cached", exc)
+            break
         except Exception as exc:  # noqa: BLE001
             conn.rollback()
             log.warning("could not classify gold article %s: %s", g.article_id, exc)

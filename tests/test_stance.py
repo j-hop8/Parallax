@@ -203,6 +203,36 @@ def test_503_is_retried_like_a_rate_limit():
     assert len(fake.calls) == 2 and slept == [10.0]
 
 
+def test_daily_quota_429_raises_immediately_without_retry():
+    """Per-day quota: waiting a minute does not help. Learned live at 20/day."""
+    from parallax.nlp.stance import DailyQuotaExhausted
+
+    class _Daily(Exception):
+        code = 429
+
+        def __init__(self):
+            super().__init__("429")
+            self.details = {
+                "error": {
+                    "details": [
+                        {
+                            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                            "quotaValue": "20",
+                        },
+                        {"retryDelay": "59s"},
+                    ]
+                }
+            }
+
+    slept: list[float] = []
+    fake = _Fake([_Daily()])
+    clf = GeminiStance(model="m", rpm=0, client=fake, sleep=slept.append)
+    with pytest.raises(DailyQuotaExhausted) as excinfo:
+        clf.classify(_inp())
+    assert slept == [] and len(fake.calls) == 1
+    assert excinfo.value.quota_value == "20" and "m" in str(excinfo.value)
+
+
 def test_non_rate_limit_errors_propagate_without_retry():
     fake = _Fake([RuntimeError("boom")])
     clf = GeminiStance(model="m", rpm=0, client=fake, sleep=lambda s: None)
