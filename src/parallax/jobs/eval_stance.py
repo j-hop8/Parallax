@@ -17,7 +17,7 @@ import argparse
 import json
 import logging
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 from .. import db
@@ -73,6 +73,10 @@ def evaluate(gold: list[GoldRow], predictions: dict[tuple[int, str], str]) -> di
         },
         "per_target": dict(sorted(by_target.items())),
         "gold_distribution": {lab: sum(1 for g in gold if g.label == lab) for lab in LABELS},
+        # Who wrote the gold. Printed next to the F1 so the number is never read
+        # without its provenance: against human labels it is validation, against
+        # another model's labels it is inter-model agreement.
+        "annotators": dict(sorted(Counter(g.annotator for g in gold).items())),
     }
 
 
@@ -82,6 +86,15 @@ def render(report: dict, *, model: str, prompt_version: str) -> str:
         + (
             f"  (missing {report['n_missing']} -- run with --classify)"
             if report["n_missing"]
+            else ""
+        ),
+        "  gold labeled by: "
+        + ", ".join(f"{a} ({n})" for a, n in report["annotators"].items())
+        + (
+            "   <- model-authored gold: this is inter-model agreement, not human validation"
+            if any(
+                a.startswith(("claude", "gemini", "gpt", "model:")) for a in report["annotators"]
+            )
             else ""
         ),
         "",

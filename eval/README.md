@@ -10,6 +10,21 @@ change the other and bump `PROMPT_VERSION`. Human and model must be scored
 against one definition of the task, or F1 measures disagreement about what
 "stance" means instead of how good the classifier is.
 
+## Provenance — read this before quoting an F1
+
+The `annotator` column says who wrote each label. **As of 2026-09-13 every
+沈伯洋 row is labeled by `claude-opus-5`**, at the project owner's decision,
+working blind from `articles` (never from `article_stance`) under the rules
+below, with a `note` on borderline calls. Two rows (156116, 156523) are flagged
+in `note`: Claude had seen Gemini's verdict on them during a smoke test.
+
+Consequence: a macro-F1 against this set measures **agreement between two
+models**, not human validation. Two LLMs can share blind spots, so treat the
+number as an upper-bound sanity check, not the proposal's milestone. The eval
+report prints the annotator breakdown next to the F1 for this reason. To make
+the milestone claim, a human labels (a sample of) the same rows under a
+different annotator name and the eval is run against those.
+
 ## The task
 
 You are labeling how **the article positions the TARGET** — the person,

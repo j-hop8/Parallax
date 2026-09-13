@@ -190,6 +190,17 @@ def test_render_shows_target_and_warns_on_small_n():
     text = ev.render(r, model="m", prompt_version="v1")
     assert "macro-F1  1.000" in text and "target > 0.75" in text and "✓" in text
     assert "small" in text
+    assert "gold labeled by: t (1)" in text
+
+
+def test_render_flags_model_authored_gold_as_agreement_not_validation():
+    """The F1 must never be read without its provenance."""
+    gold = [GoldRow(1, "udn", "u", "沈伯洋", "neg", "claude-opus-5", "2026-09-13")]
+    text = ev.render(ev.evaluate(gold, {(1, "沈伯洋"): "neg"}), model="m", prompt_version="v1")
+    assert "claude-opus-5 (1)" in text and "inter-model agreement" in text
+    human = [GoldRow(1, "udn", "u", "沈伯洋", "neg", "jimmy", "2026-09-13")]
+    text = ev.render(ev.evaluate(human, {(1, "沈伯洋"): "neg"}), model="m", prompt_version="v1")
+    assert "inter-model agreement" not in text
 
 
 def test_eval_main_never_spends_quota_without_classify(monkeypatch, tmp_path, capsys):
