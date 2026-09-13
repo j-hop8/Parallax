@@ -105,7 +105,7 @@ def test_parse_accepts_the_schema_and_clamps_confidence():
         0.9,
         "遭質疑",
     )
-    assert parse_response('{"label":"pos","confidence":1.7,"evidence":""}')[1] == 1.0
+    assert parse_response('{"label":"pos","confidence":1.7,"evidence":"y"}')[1] == 1.0
     assert parse_response('{"label":"neu","confidence":-2,"evidence":"x"}')[1] == 0.0
 
 
@@ -114,10 +114,14 @@ def test_parse_accepts_the_schema_and_clamps_confidence():
     [
         '{"label":"mixed","confidence":0.5,"evidence":"x"}',
         '{"label":"neg","confidence":"high","evidence":"x"}',
+        '{"label":"neg","confidence":0.9,"evidence":""}',
+        '{"label":"neg","confidence":0.9,"evidence":"   "}',
+        '{"label":"neg","confidence":0.9}',
         "not json at all",
     ],
 )
 def test_parse_rejects_off_schema_output_instead_of_guessing(bad):
+    """Includes empty evidence: a verdict nobody can audit must not be cached."""
     with pytest.raises(ValueError):
         parse_response(bad)
 

@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS article_stance (
     prompt_version TEXT   NOT NULL,          -- parallax.nlp.stance.PROMPT_VERSION at write time
     label          TEXT   NOT NULL CHECK (label IN ('neg', 'neu', 'pos')),
     confidence     REAL   NOT NULL,          -- the model's own 0..1
-    evidence       TEXT,                     -- the phrase it cites; what makes a label auditable
+    evidence       TEXT   NOT NULL CHECK (evidence <> ''),  -- the cited phrase; a label without one is unauditable
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (article_id, target, model, prompt_version)
 );

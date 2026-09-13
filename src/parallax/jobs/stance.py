@@ -76,7 +76,7 @@ def classify_keyword(
                     prompt_version=result.prompt_version,
                     label=result.label,
                     confidence=result.confidence,
-                    evidence=result.evidence or None,
+                    evidence=result.evidence,
                 )
                 conn.commit()
             except Exception as exc:  # noqa: BLE001 -- isolation is the point

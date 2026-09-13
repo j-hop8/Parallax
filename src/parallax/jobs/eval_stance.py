@@ -136,7 +136,7 @@ def _fill_missing(conn, gold: list[GoldRow], classifier: StanceClassifier) -> in
                 prompt_version=result.prompt_version,
                 label=result.label,
                 confidence=result.confidence,
-                evidence=result.evidence or None,
+                evidence=result.evidence,
             )
             conn.commit()
             done += 1

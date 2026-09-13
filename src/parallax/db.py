@@ -223,7 +223,7 @@ def save_stance(
     prompt_version: str,
     label: str,
     confidence: float,
-    evidence: str | None,
+    evidence: str,
 ) -> None:
     """Upsert one verdict. The key is the cache key, so a re-run overwrites itself."""
     with conn.cursor() as cur:

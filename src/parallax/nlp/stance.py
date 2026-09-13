@@ -135,7 +135,7 @@ RESPONSE_SCHEMA: dict[str, Any] = {
     "properties": {
         "label": {"type": "string", "enum": list(LABELS)},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "evidence": {"type": "string"},
+        "evidence": {"type": "string", "minLength": 1},
     },
     "required": ["label", "confidence", "evidence"],
 }
@@ -171,6 +171,11 @@ def parse_response(text: str) -> tuple[str, float, str]:
         raise ValueError(f"stance confidence unusable: {data.get('confidence')!r}") from exc
     confidence = min(1.0, max(0.0, confidence))
     evidence = str(data.get("evidence") or "").strip()
+    if not evidence:
+        # A label with no cited phrase is unauditable. Rejecting it here means
+        # nothing is cached, so the article is simply retried next run instead
+        # of carrying an unexplained verdict forever.
+        raise ValueError(f"stance response has no evidence phrase for label {label!r}")
     return label, confidence, evidence
 
 
