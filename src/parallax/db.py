@@ -164,3 +164,102 @@ def mark_enrich_failed(conn: psycopg.Connection, article_id: int, error: str) ->
             """,
             (article_id, error[:2000]),
         )
+
+
+# ---- Q1: stance -----------------------------------------------------------
+
+_ENRICHED_FOR_KEYWORD = """
+SELECT ai.id, ai.outlet, ai.title, ai.url_original, ai.effective_at, a.body
+FROM article_index ai
+JOIN articles a ON a.id = ai.id
+   , plainto_tsquery('simple', %(q)s) query
+WHERE to_tsvector('simple', ai.title_seg) @@ query
+  AND a.body IS NOT NULL AND a.body <> ''
+ORDER BY ai.effective_at DESC
+LIMIT %(limit)s
+"""
+
+
+def find_enriched_articles(conn: psycopg.Connection, keyword: str, limit: int = 500) -> list[dict]:
+    """Keyword matches that have a body -- the only ones stance can be judged on.
+
+    Same title match as search.find_articles (and the same rule: the keyword
+    must be segmented before it reaches Postgres, invariant 6) joined to the
+    tier-2 row. An article that matched but was never enriched is not an
+    error here; it is simply not yet classifiable, and `make enrich` is the fix.
+    """
+    from .nlp.segment import segment_text
+
+    segmented = segment_text(keyword)
+    if not segmented:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(_ENRICHED_FOR_KEYWORD, {"q": segmented, "limit": limit})
+        return cur.fetchall()
+
+
+def get_stance(
+    conn: psycopg.Connection, article_id: int, target: str, model: str, prompt_version: str
+) -> dict | None:
+    """The cached verdict for this exact (article, target, model, prompt), if any."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT label, confidence, evidence, created_at
+            FROM article_stance
+            WHERE article_id = %s AND target = %s AND model = %s AND prompt_version = %s
+            """,
+            (article_id, target, model, prompt_version),
+        )
+        return cur.fetchone()
+
+
+def save_stance(
+    conn: psycopg.Connection,
+    *,
+    article_id: int,
+    target: str,
+    model: str,
+    prompt_version: str,
+    label: str,
+    confidence: float,
+    evidence: str | None,
+) -> None:
+    """Upsert one verdict. The key is the cache key, so a re-run overwrites itself."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO article_stance
+                (article_id, target, model, prompt_version, label, confidence, evidence)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (article_id, target, model, prompt_version) DO UPDATE
+                SET label = EXCLUDED.label,
+                    confidence = EXCLUDED.confidence,
+                    evidence = EXCLUDED.evidence,
+                    created_at = now()
+            """,
+            (article_id, target, model, prompt_version, label, confidence, evidence),
+        )
+
+
+def stance_by_outlet(
+    conn: psycopg.Connection, target: str, model: str, prompt_version: str
+) -> list[dict]:
+    """Q1 in one query: per outlet, how many neg / neu / pos toward the target."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ai.outlet,
+                   count(*) FILTER (WHERE s.label = 'neg') AS neg,
+                   count(*) FILTER (WHERE s.label = 'neu') AS neu,
+                   count(*) FILTER (WHERE s.label = 'pos') AS pos,
+                   count(*) AS n
+            FROM article_stance s
+            JOIN article_index ai ON ai.id = s.article_id
+            WHERE s.target = %s AND s.model = %s AND s.prompt_version = %s
+            GROUP BY ai.outlet
+            ORDER BY ai.outlet
+            """,
+            (target, model, prompt_version),
+        )
+        return cur.fetchall()

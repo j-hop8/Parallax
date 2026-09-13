@@ -18,7 +18,8 @@ dependencies = [
 # Kept optional so the crawler — the part that must run from day one — installs
 # without dragging in torch. See notes in the plan re: Intel-Mac torch support.
 nlp = ["transformers", "torch", "scikit-learn", "datasets"]
-llm = ["anthropic>=0.40"]
+# Stance classifier backend (T-007). Optional so the crawler installs without it.
+llm = ["google-genai>=1.0"]
 ui = ["streamlit>=1.38"]
 
 [dependency-groups]

@@ -109,6 +109,29 @@ CREATE INDEX IF NOT EXISTS articles_body_fts_idx
     ON articles USING GIN (to_tsvector('simple', body_seg));
 
 
+-- Q1. Stance is toward a *target* -- the keyword the user searched for -- not
+-- a property of the article, so one article can carry several rows. The
+-- primary key is also the cache key: exactly one classifier call ever per
+-- (article, target, model, prompt). Bumping prompt_version starts a fresh set
+-- of rows and leaves the old ones comparable in eval, which is the point of
+-- keeping it separate from model. articles.stance_* (one slot per article)
+-- predates this table and is left untouched.
+CREATE TABLE IF NOT EXISTS article_stance (
+    article_id     BIGINT NOT NULL REFERENCES articles (id) ON DELETE CASCADE,
+    target         TEXT   NOT NULL,
+    model          TEXT   NOT NULL,          -- e.g. gemini-3.8-flash
+    prompt_version TEXT   NOT NULL,          -- parallax.nlp.stance.PROMPT_VERSION at write time
+    label          TEXT   NOT NULL CHECK (label IN ('neg', 'neu', 'pos')),
+    confidence     REAL   NOT NULL,          -- the model's own 0..1
+    evidence       TEXT,                     -- the phrase it cites; what makes a label auditable
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (article_id, target, model, prompt_version)
+);
+
+CREATE INDEX IF NOT EXISTS article_stance_target_idx
+    ON article_stance (target, model, prompt_version);
+
+
 -- Denominator for coverage weight. Day is Asia/Taipei, never UTC: bucketing by
 -- UTC misassigns everything published after 08:00 local.
 CREATE TABLE IF NOT EXISTS outlet_daily_totals (

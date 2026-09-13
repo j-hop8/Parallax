@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint
+.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich stance stance.eval label
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -11,6 +11,10 @@ help:
 	@echo "crawl      run the tier-1 listing crawl once"
 	@echo "crawl.one  run one outlet, e.g. make crawl.one OUTLET=cna"
 	@echo "health     per-outlet crawl health for the last 24h"
+	@echo "enrich     tier-2 body fetch for a keyword, e.g. make enrich KEYWORD=沈伯洋"
+	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"
+	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
+	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
 	@echo "test       pytest"
 
 setup: dict
@@ -74,6 +78,21 @@ crawl.one:
 
 rollup:
 	uv run python -m parallax.jobs.rollup_daily
+
+# ---- tier 2 + Q1 ---------------------------------------------------------
+# All keyword-scoped: nothing here runs over the whole index. `stance` and
+# `stance.eval --classify` spend API quota; everything else is local.
+enrich:
+	uv run python -m parallax.jobs.enrich --keyword "$(KEYWORD)" $(ARGS)
+
+stance:
+	uv run python -m parallax.jobs.stance --keyword "$(KEYWORD)" $(ARGS)
+
+label:
+	uv run python scripts/label_stance.py --keyword "$(KEYWORD)" $(ARGS)
+
+stance.eval:
+	uv run python -m parallax.jobs.eval_stance $(ARGS)
 
 # The query that answers "is tier-1 still working?". A zero or a stale last_run
 # here means data is being lost right now and cannot be backfilled.

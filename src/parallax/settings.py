@@ -4,6 +4,32 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load_dotenv(path: Path) -> None:
+    """Read KEY=VALUE lines from .env into the environment, never overriding.
+
+    Kept to a dozen lines rather than a dependency: the only secret this
+    project holds is one API key, and every job -- launchd crawl included --
+    must pick it up without a wrapper script. A variable already exported in
+    the shell wins, so `STANCE_RPM=10 make stance` behaves as expected.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv(ROOT / ".env")
+
 CONFIG_DIR = ROOT / "config"
 RAW_DIR = ROOT / "raw"
 LOG_DIR = ROOT / "logs"
@@ -29,3 +55,11 @@ TIMEZONE = "Asia/Taipei"
 # enough for the ratio to be stable. Below this, the UI suppresses the number
 # rather than showing a noisy one.
 MIN_DAILY_DENOMINATOR = 20
+
+# Q1 stance classifier (T-007). The model must show a free tier on the user's
+# AI Studio account; limits are per-account and unpublished, so the client
+# paces itself to STANCE_RPM and backs off on 429 rather than assuming a quota.
+# 5/min is deliberately under any free tier -- raise it after checking
+# https://aistudio.google.com/rate-limit, not before.
+STANCE_MODEL = os.environ.get("STANCE_MODEL", "gemini-3.8-flash")
+STANCE_RPM = float(os.environ.get("STANCE_RPM", "5"))
