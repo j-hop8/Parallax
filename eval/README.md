@@ -102,3 +102,45 @@ policy target). Commit the CSV with the label session's branch.
 `article_id, outlet, url, target, label, annotator, labeled_at, note` —
 one row per (article, target). The same article may appear under two targets
 with different labels; that is correct, not a duplicate.
+
+---
+
+# Duplicate-pair gold set — annotation guide (T-008)
+
+`dup_gold.csv` holds labeled article pairs for the clusterer (proposal §9:
+**precision > 0.90, recall > 0.80** on 200 pairs). Same provenance rule as the
+stance set: the `annotator` column says who labeled, and the eval prints it.
+
+## The question
+
+**Is B the same copy as A — syndicated, reprinted, or lightly rewritten?**
+
+`y` (duplicate) when:
+- one is a reprint of the other, or both reprint the same source (CNA wire,
+  鏡週刊, a press release run verbatim), with at most a paragraph added or
+  dropped, the byline/dateline changed, or a few words edited;
+- the same article served twice by one outlet (udn's section-path duplicates).
+
+`n` (not) when:
+- both articles quote the same statement or press release at length but are
+  otherwise their own reporting — different headline, lede, structure;
+- same event, same facts, independently written;
+- one is a short teaser or listing blurb for the other (too little to be a copy).
+
+`s` skip when either side is not a real article body (promo text only).
+
+## What the tool shows
+
+Both outlets, headlines, ledes, and a **shared-sentence count**. It never
+shows the similarity score or the current cluster verdict. `b` prints more of
+both bodies. Pairs are offered **stratified by similarity**, so most of what
+you see sits near the boundary — that is deliberate; do not expect the mix to
+look like the corpus.
+
+## Workflow
+
+```bash
+make dedup                     # clusters must exist; this also fingerprints
+make label.pairs ARGS="--n 100 --annotator <you> --seed 1"
+make dedup.eval                # P/R at the defaults + a threshold sweep
+```

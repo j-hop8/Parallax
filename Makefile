@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich stance stance.eval label
+.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich stance stance.eval label dedup label.pairs dedup.eval
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -15,6 +15,9 @@ help:
 	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"
 	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
 	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
+	@echo "dedup      rebuild near-duplicate clusters + propagation order (Q3); ARGS=--keyword X narrows"
+	@echo "label.pairs  hand-label candidate pairs into eval/dup_gold.csv (blind)"
+	@echo "dedup.eval   precision/recall of the clusterer against the pair gold set"
 	@echo "test       pytest"
 
 setup: dict
@@ -93,6 +96,16 @@ label:
 
 stance.eval:
 	uv run python -m parallax.jobs.eval_stance $(ARGS)
+
+# ---- Q3: dedup -----------------------------------------------------------
+dedup:
+	uv run python -m parallax.jobs.dedup $(ARGS)
+
+label.pairs:
+	uv run python scripts/label_pairs.py $(ARGS)
+
+dedup.eval:
+	uv run python -m parallax.jobs.eval_dedup $(ARGS)
 
 # The query that answers "is tier-1 still working?". A zero or a stale last_run
 # here means data is being lost right now and cannot be backfilled.

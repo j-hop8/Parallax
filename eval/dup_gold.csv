@@ -1,0 +1,119 @@
+article_a,article_b,is_duplicate,annotator,labeled_at,note
+39559,67804,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+147569,147630,true,claude-opus-5,2026-09-13T14:26:56+00:00,ltn reprints cna wire; own caption only
+33496,34939,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; udn paraphrased
+19516,33496,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+45101,49236,true,claude-opus-5,2026-09-13T14:26:56+00:00,udn reprints cna verbatim
+18404,24364,false,claude-opus-5,2026-09-13T14:26:56+00:00,same FB post quoted; own writeups
+42877,49717,false,claude-opus-5,2026-09-13T14:26:56+00:00,same column quoted
+53403,56410,false,claude-opus-5,2026-09-13T14:26:56+00:00,both transcribe the CWA bulletin; wording differs
+145875,147394,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+28421,29812,false,claude-opus-5,2026-09-13T14:26:56+00:00,same press release; tvbs adds own reporting
+29812,73974,false,claude-opus-5,2026-09-13T14:26:56+00:00,"tvbs related-story rail, not a copy"
+147632,148609,false,claude-opus-5,2026-09-13T14:26:56+00:00,same FB post quoted
+42837,138354,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+118951,119632,true,claude-opus-5,2026-09-13T14:26:56+00:00,udn reprints cna verbatim
+155154,156121,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail: B appends A as related story
+138714,139969,false,claude-opus-5,2026-09-13T14:26:56+00:00,same FB post quoted
+34939,35867,true,claude-opus-5,2026-09-13T14:26:56+00:00,same article served twice by udn
+49958,148255,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+28421,30560,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same press conference, different writeups"
+109749,119955,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+156116,156121,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+28458,109749,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+79497,112410,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+92153,142866,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+36226,38412,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; cna paraphrased
+155154,156116,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+9929,48276,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+146475,149323,true,claude-opus-5,2026-09-13T14:26:56+00:00,both reprint the same AP-via-cna text
+148258,148704,false,claude-opus-5,2026-09-13T14:26:56+00:00,two tvbs weather pieces; rail plus shared CWA text
+45101,47383,true,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs reprints cna verbatim
+140530,150486,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+80801,80937,false,claude-opus-5,2026-09-13T14:26:56+00:00,same campaign statement paraphrased
+39559,118042,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same template, different typhoons"
+11881,84950,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+96214,130362,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+105212,105303,true,claude-opus-5,2026-09-13T14:26:56+00:00,same 鏡週刊 syndicated piece
+46857,79150,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same FB source, different days"
+80985,136662,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+35859,36745,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same CWA briefing, independently written; ftv much shorter"
+11881,119955,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+28421,30981,true,claude-opus-5,2026-09-13T14:26:56+00:00,same press release run verbatim with own lede only; boundary case
+27395,29409,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same event, different writeups"
+34939,36226,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; udn paraphrased
+30560,30981,false,claude-opus-5,2026-09-13T14:26:56+00:00,cna paraphrases; ftv verbatim; not the same copy
+154510,155177,false,claude-opus-5,2026-09-13T14:26:56+00:00,same FB post quoted
+45545,58347,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+148563,149093,false,claude-opus-5,2026-09-13T14:26:56+00:00,same source report paraphrased; every sentence differs
+38412,146490,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+46514,48284,false,claude-opus-5,2026-09-13T14:26:56+00:00,ftv follow-up recycles its own crowd paragraphs; new story
+149389,149622,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+155663,155948,false,claude-opus-5,2026-09-13T14:26:56+00:00,same quotes; udn appends cna text at the end
+73974,109749,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+138628,139969,false,claude-opus-5,2026-09-13T14:26:56+00:00,ltn reuses one JMA paragraph; different story
+47383,49236,true,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs reprints cna verbatim
+35867,36226,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; udn paraphrased
+30560,62539,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+24490,46524,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+108350,147315,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+145533,145724,true,claude-opus-5,2026-09-13T14:26:56+00:00,setn reprints cna verbatim
+136643,138354,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+46514,47295,false,claude-opus-5,2026-09-13T14:26:56+00:00,same event; campaign-supplied crowd paragraph; own writeups
+145672,149323,true,claude-opus-5,2026-09-13T14:26:56+00:00,setn reprints cna
+40170,109687,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+33496,36226,true,claude-opus-5,2026-09-13T14:26:56+00:00,both run the bureau statement verbatim with own ledes; boundary case
+55825,146482,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+49223,55827,true,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs reprints cna plus extra
+80801,86661,false,claude-opus-5,2026-09-13T14:26:56+00:00,same campaign material paraphrased
+55294,56758,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same quotes, own writeups"
+145711,147394,false,claude-opus-5,2026-09-13T14:26:56+00:00,same column quoted
+75640,107460,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same source, different days"
+38743,91201,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+34939,38412,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; cna paraphrased
+145672,146475,true,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs reprints cna plus rails
+33496,35867,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; udn paraphrased
+28394,28421,false,claude-opus-5,2026-09-13T14:26:56+00:00,one policy paragraph quoted verbatim inside own story
+87291,89849,true,claude-opus-5,2026-09-13T14:26:56+00:00,setn reprints cna
+27395,47213,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+73877,75549,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same FB post, own writeups"
+45,268,true,claude-opus-5,2026-09-13T14:26:56+00:00,ltn reprints cna wire
+47300,152489,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+59355,150478,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+19517,140175,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+39497,46514,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same event, own writeups"
+34939,93879,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+28458,73974,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+85400,87291,true,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs reprints cna plus rails
+124857,125959,true,claude-opus-5,2026-09-13T14:26:56+00:00,udn reprints cna verbatim
+25672,44141,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+146833,149323,true,claude-opus-5,2026-09-13T14:26:56+00:00,both reprint cna
+152489,155101,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+33496,38412,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; cna paraphrased
+33496,151918,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+9929,49536,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+35867,38412,false,claude-opus-5,2026-09-13T14:26:56+00:00,same bureau statement; cna paraphrased
+28458,29812,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+85400,89849,true,claude-opus-5,2026-09-13T14:26:56+00:00,both reprint cna
+116751,140448,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+119978,134415,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+80937,86661,false,claude-opus-5,2026-09-13T14:26:56+00:00,same campaign statement paraphrased
+145672,146833,true,claude-opus-5,2026-09-13T14:26:56+00:00,udn reprints cna
+55827,79497,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+53544,55827,true,claude-opus-5,2026-09-13T14:26:56+00:00,both reprint cna
+153279,155101,false,claude-opus-5,2026-09-13T14:26:56+00:00,setn recycles its own intro; different second half
+49223,53544,true,claude-opus-5,2026-09-13T14:26:56+00:00,setn reprints cna
+38759,80801,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+115385,115668,true,claude-opus-5,2026-09-13T14:26:56+00:00,udn reprints cna
+41975,107460,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+71653,78321,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+29812,109749,false,claude-opus-5,2026-09-13T14:26:56+00:00,tvbs rail
+49597,53403,false,claude-opus-5,2026-09-13T14:26:56+00:00,both quote the CWA bulletin inside short own pieces
+13854,49958,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+30271,95052,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+42537,42877,false,claude-opus-5,2026-09-13T14:26:56+00:00,same column quoted at length; own ledes
+146475,146833,true,claude-opus-5,2026-09-13T14:26:56+00:00,both reprint cna
+76628,155154,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+42835,149252,false,claude-opus-5,2026-09-13T14:26:56+00:00,
+19517,20882,false,claude-opus-5,2026-09-13T14:26:56+00:00,"same CWA briefing, independently written"
+13870,51829,false,claude-opus-5,2026-09-13T14:26:56+00:00,
