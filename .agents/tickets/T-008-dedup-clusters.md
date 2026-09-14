@@ -53,7 +53,8 @@ Target (proposal §9): precision > 0.90, recall > 0.80 on 200 labeled pairs.
 - `src/parallax/db.py` (fingerprint / cluster / readout helpers)
 - `src/parallax/jobs/dedup.py`, `src/parallax/jobs/eval_dedup.py`
 - `scripts/label_pairs.py`, `eval/dup_gold.csv`, `eval/README.md` (appendix)
-- `Makefile`; `tests/test_dedup.py`, `tests/test_dedup_jobs.py`
+- `Makefile`; `tests/test_dedup.py`, `tests/test_dedup_jobs.py`, `tests/test_dedup_eval.py`,
+  `tests/test_dedup_db.py` (DB-gated, rolled back)
 - this ticket (archived to `done/` at ship)
 
 ## Do not touch

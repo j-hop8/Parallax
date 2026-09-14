@@ -340,34 +340,27 @@ def replace_clusters(
 ) -> dict[str, int]:
     """Make the stored clusters equal to `clusters` for the articles in scope.
 
-    Full replacement, in one transaction the caller commits: members in scope
-    are detached, clusters that no longer exist are deleted, the rest are
-    upserted by their stable id (min member id) and members re-attached with
-    rank and origin. shared_core_text is left alone -- T-009 owns it.
-    Returns change counts; a second identical run reports all zeros except
-    'members_set', which is the number of members re-attached.
+    A reconcile, not a wipe-and-rewrite: rows are touched only where the
+    stored cluster id / origin flag / rank differ from what the run computed,
+    so a second identical run reports zeros everywhere -- which is how the
+    job proves it is idempotent. Order is FK-safe: clusters are upserted
+    first so every id a member will point at exists, members are re-pointed
+    or detached next, and only then are clusters nobody references deleted.
+    shared_core_text is left alone -- T-009 owns it.
     """
-    counts = {"clusters_upserted": 0, "clusters_deleted": 0, "members_set": 0}
+    counts = {
+        "clusters_upserted": 0,
+        "clusters_deleted": 0,
+        "members_set": 0,
+        "members_detached": 0,
+    }
+    desired: dict[int, tuple[int, bool, int]] = {}
+    for c in clusters:
+        for rank, m in enumerate(c.members, 1):
+            desired[m.article_id] = (c.cluster_id, rank == 1, rank)
     keep_ids = [c.cluster_id for c in clusters]
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE articles
-               SET dup_cluster_id = NULL, is_cluster_origin = FALSE, cluster_rank = NULL
-             WHERE id = ANY(%s)
-            """,
-            (scope_ids,),
-        )
-        cur.execute(
-            """
-            DELETE FROM dup_clusters
-             WHERE NOT (cluster_id = ANY(%s))
-               AND NOT EXISTS (SELECT 1 FROM articles WHERE dup_cluster_id = dup_clusters.cluster_id)
-            """,
-            (keep_ids,),
-        )
-        counts["clusters_deleted"] = cur.rowcount
 
+    with conn.cursor() as cur:
         for c in clusters:
             cur.execute(
                 """
@@ -395,18 +388,43 @@ def replace_clusters(
                 },
             )
             counts["clusters_upserted"] += cur.rowcount
-            for rank, m in enumerate(c.members, 1):
-                cur.execute(
-                    """
-                    UPDATE articles
-                       SET dup_cluster_id = %s, is_cluster_origin = %s, cluster_rank = %s
-                     WHERE id = %s
-                    """,
-                    (c.cluster_id, rank == 1, rank, m.article_id),
-                )
-                counts["members_set"] += cur.rowcount
+
+        for article_id, (cluster_id, is_origin, rank) in desired.items():
+            cur.execute(
+                """
+                UPDATE articles
+                   SET dup_cluster_id = %(c)s, is_cluster_origin = %(o)s, cluster_rank = %(r)s
+                 WHERE id = %(id)s
+                   AND (dup_cluster_id IS DISTINCT FROM %(c)s
+                        OR is_cluster_origin IS DISTINCT FROM %(o)s
+                        OR cluster_rank IS DISTINCT FROM %(r)s)
+                """,
+                {"id": article_id, "c": cluster_id, "o": is_origin, "r": rank},
+            )
+            counts["members_set"] += cur.rowcount
+
+        cur.execute(
+            """
+            UPDATE articles
+               SET dup_cluster_id = NULL, is_cluster_origin = FALSE, cluster_rank = NULL
+             WHERE id = ANY(%s) AND NOT (id = ANY(%s)) AND dup_cluster_id IS NOT NULL
+            """,
+            (scope_ids, list(desired) or [0]),
+        )
+        counts["members_detached"] = cur.rowcount
+
+        cur.execute(
+            """
+            DELETE FROM dup_clusters
+             WHERE NOT (cluster_id = ANY(%s))
+               AND NOT EXISTS (SELECT 1 FROM articles WHERE dup_cluster_id = dup_clusters.cluster_id)
+            """,
+            (keep_ids or [0],),
+        )
+        counts["clusters_deleted"] = cur.rowcount
         # Keep the sequence ahead of explicit ids so nothing else ever collides.
         cur.execute(
-            "SELECT setval('dup_clusters_cluster_id_seq', GREATEST((SELECT COALESCE(MAX(cluster_id), 0) FROM dup_clusters), 1))"
+            "SELECT setval('dup_clusters_cluster_id_seq', "
+            "GREATEST((SELECT COALESCE(MAX(cluster_id), 0) FROM dup_clusters), 1))"
         )
     return counts
