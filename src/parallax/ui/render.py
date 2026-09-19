@@ -32,7 +32,6 @@ from ..settings import TIMEZONE
 TZ = ZoneInfo(TIMEZONE)
 
 CORE_CHARS = 120
-DELTA_CHARS = 160
 
 STANCE_NOTE = "立場分數來自「目標依存情緒分析」，判斷對事件當事人的態度，而非文句整體語氣。"
 
@@ -278,11 +277,14 @@ def q4() -> str:
 
 
 def _member_deltas(m: MemberView, confident: bool) -> str:
-    """Full delta lines behind a <details>; removed lines only when a direction exists."""
+    """Full delta lines behind a <details>; removed lines only when a direction exists.
+
+    Unclipped: the reader opened this to see the whole sentence, and a clip
+    here would hide the tail of exactly the lines long enough to matter."""
     removed = m.delta_removed if confident else ()
     added_mark = "＋" if confident else "本版獨有"
-    lines = [f"{added_mark} {_clip(s, DELTA_CHARS)}" for s in m.delta_added]
-    lines += [f"－ {_clip(s, DELTA_CHARS)}" for s in removed]
+    lines = [f"{added_mark} {' '.join(s.split())}" for s in m.delta_added]
+    lines += [f"－ {' '.join(s.split())}" for s in removed]
     if not lines:
         return ""
     items = "".join(f"<li>{esc(line)}</li>" for line in lines)
@@ -307,13 +309,20 @@ def _member_row(m: MemberView, c: ClusterView, names: dict[str, str]) -> str:
     )
 
 
+def _followers(c: ClusterView) -> int:
+    """Distinct outlets other than the origin's. Members are articles, and one
+    outlet can run two of them; the design's "n 家媒體跟進" counts outlets."""
+    assert c.origin is not None
+    return len({m.outlet for m in c.members} - {c.origin.outlet})
+
+
 def cluster_card(c: ClusterView, index: int, names: dict[str, str]) -> str:
     if c.origin is not None:
         o = c.origin
         head = (
             f'<span class="origin">起源：{esc(names.get(o.outlet, o.outlet))}'
             f' <span class="mono">({_mmdd(o.effective_at)} {_hhmm(o.effective_at)})</span></span>'
-            f'<span class="muted small">{len(c.members) - 1} 家媒體跟進</span>'
+            f'<span class="muted small">{_followers(c)} 家媒體跟進 · {len(c.members)} 篇</span>'
         )
     else:
         head = (

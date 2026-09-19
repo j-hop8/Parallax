@@ -86,7 +86,7 @@ def test_confident_cluster_card():
     r = _report()
     out = render.clusters(r)
     a = out[out.index("群組 A") : out.index("群組 B")]
-    assert "起源：中央社" in a and "(01-01 09:12)" in a and "1 家媒體跟進" in a
+    assert "起源：中央社" in a and "(01-01 09:12)" in a and "1 家媒體跟進 · 2 篇" in a
     assert "#1" in a and "#2" in a and "+12分" in a
     assert "＋ 加入鄰居受訪" in a and "完整差異 1 行" in a
     assert "標題未含關鍵字" in a  # the ltn member did not match the keyword
@@ -111,6 +111,27 @@ def test_indeterminate_cluster_has_no_rank_origin_or_direction():
     assert "本版獨有 本版才有" in out
     # Members still appear, in time order, without ranks.
     assert out.count("px-member") == 2
+
+
+def test_full_deltas_are_not_clipped_behind_details():
+    r = _report()
+    c = r.cluster_views[0]
+    long = "甲" * 300 + "尾端關鍵差異"
+    m = replace(c.members[1], delta_added=(long,))
+    out = render.cluster_card(replace(c, members=(c.members[0], m)), 0, {})
+    assert "尾端關鍵差異" in out and "…" not in out.split("<details>")[1]
+
+
+def test_followers_count_outlets_not_articles():
+    r = _report()
+    c = r.cluster_views[0]
+    # A second ltn article and a second cna article: still one outlet followed.
+    members = c.members + (
+        replace(c.members[1], article_id=7, rank=3),
+        replace(c.members[0], article_id=8, rank=4),
+    )
+    out = render.cluster_card(replace(c, members=members), 0, {})
+    assert "1 家媒體跟進 · 4 篇" in out
 
 
 def test_q4_panel_has_no_numbers():
