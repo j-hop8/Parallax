@@ -106,6 +106,42 @@ def test_body_excludes_script_and_style_content():
     assert "實際內容段落文字" in body
 
 
+def test_tvbs_body_drops_the_related_story_rail():
+    """Each tvbs page appends other articles' headlines and ledes, wrapped in
+    <a>. They are different on every page, so only the DOM can identify them;
+    left in, they were 68% of the tvbs "body" and every one showed up as text
+    tvbs "added" to a wire copy (T-009)."""
+    body = extract_body(_html("tvbs"))
+    for rail in ("D23粉絲大會", "威斯特布魯克", "翁曉玲", "草屯鎮"):
+        assert rail not in body, f"rail item {rail!r} survived"
+    assert len(body) > 200
+
+
+def test_paragraph_made_of_links_is_navigation_not_prose():
+    body = extract_body(
+        "<html><body><article>"
+        "<p>正文第一段，內容充實。</p>"
+        "<p>詳情請見<a href='/x'>相關報導</a>，記者會持續追蹤。</p>"  # one inline link: prose
+        "<p><a href='/a'>▪其他新聞一</a><br/><a href='/b'>▪其他新聞二</a></p>"  # udn box
+        "<a href='/c'><p>另一篇文章的標題</p><p>另一篇文章的導言。</p></a>"  # tvbs rail
+        "</article></body></html>"
+    )
+    assert body.split("\n") == ["正文第一段，內容充實。", "詳情請見相關報導，記者會持續追蹤。"]
+
+
+@pytest.mark.parametrize("code", ["cna", "ftv", "chinatimes"])
+def test_link_rule_leaves_outlets_without_rails_untouched(code: str):
+    """Measured on the cached corpus: these three lose zero characters."""
+    body = extract_body(_html(code))
+    soup = BeautifulSoup(_html(code), "lxml")
+    node = soup.find("article") or soup.find(attrs={"itemprop": "articleBody"})
+    assert node is not None
+    for tag in node(["script", "style", "nav", "header", "footer", "aside", "iframe", "figure"]):
+        tag.decompose()
+    naive = "\n".join(p for p in (q.get_text(strip=True) for q in node.find_all("p")) if p)
+    assert body == naive
+
+
 def test_missing_timestamp_returns_none_rather_than_now():
     """No timestamp must stay absent so effective_at can fall back to seen_at."""
     assert extract_published_at("<html><body><p>x</p></body></html>") is None

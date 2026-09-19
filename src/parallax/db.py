@@ -346,7 +346,13 @@ def replace_clusters(
     job proves it is idempotent. Order is FK-safe: clusters are upserted
     first so every id a member will point at exists, members are re-pointed
     or detached next, and only then are clusters nobody references deleted.
-    shared_core_text is left alone -- T-009 owns it.
+
+    T-009's columns are cleared, never computed, here: a member that moves to
+    another cluster or leaves one has deltas that compare it to the wrong
+    text, and a cluster whose membership changed has a stale core. A rank
+    change inside the same cluster keeps them -- `make framing` recomputes
+    and clears the summary only if the deltas actually differ, so quota is
+    not re-spent on a no-op.
     """
     counts = {
         "clusters_upserted": 0,
@@ -373,6 +379,7 @@ def replace_clusters(
                         origin_article_id = EXCLUDED.origin_article_id,
                         first_published_at = EXCLUDED.first_published_at,
                         origin_confident = EXCLUDED.origin_confident,
+                        shared_core_text = NULL,
                         computed_at = now()
                   WHERE dup_clusters.member_count IS DISTINCT FROM EXCLUDED.member_count
                      OR dup_clusters.origin_article_id IS DISTINCT FROM EXCLUDED.origin_article_id
@@ -393,7 +400,17 @@ def replace_clusters(
             cur.execute(
                 """
                 UPDATE articles
-                   SET dup_cluster_id = %(c)s, is_cluster_origin = %(o)s, cluster_rank = %(r)s
+                   SET dup_cluster_id = %(c)s, is_cluster_origin = %(o)s, cluster_rank = %(r)s,
+                       delta_added = CASE WHEN dup_cluster_id IS DISTINCT FROM %(c)s
+                                          THEN NULL ELSE delta_added END,
+                       delta_removed = CASE WHEN dup_cluster_id IS DISTINCT FROM %(c)s
+                                            THEN NULL ELSE delta_removed END,
+                       delta_summary = CASE WHEN dup_cluster_id IS DISTINCT FROM %(c)s
+                                            THEN NULL ELSE delta_summary END,
+                       delta_summary_model = CASE WHEN dup_cluster_id IS DISTINCT FROM %(c)s
+                                                  THEN NULL ELSE delta_summary_model END,
+                       delta_summary_version = CASE WHEN dup_cluster_id IS DISTINCT FROM %(c)s
+                                                    THEN NULL ELSE delta_summary_version END
                  WHERE id = %(id)s
                    AND (dup_cluster_id IS DISTINCT FROM %(c)s
                         OR is_cluster_origin IS DISTINCT FROM %(o)s
@@ -406,7 +423,9 @@ def replace_clusters(
         cur.execute(
             """
             UPDATE articles
-               SET dup_cluster_id = NULL, is_cluster_origin = FALSE, cluster_rank = NULL
+               SET dup_cluster_id = NULL, is_cluster_origin = FALSE, cluster_rank = NULL,
+                   delta_added = NULL, delta_removed = NULL, delta_summary = NULL,
+                   delta_summary_model = NULL, delta_summary_version = NULL
              WHERE id = ANY(%s) AND NOT (id = ANY(%s)) AND dup_cluster_id IS NOT NULL
             """,
             (scope_ids, list(desired) or [0]),
@@ -428,3 +447,153 @@ def replace_clusters(
             "GREATEST((SELECT COALESCE(MAX(cluster_id), 0) FROM dup_clusters), 1))"
         )
     return counts
+
+
+# ---- Q3: framing delta -----------------------------------------------------
+
+
+def bodies_by_outlet(conn: psycopg.Connection) -> dict[str, list[str]]:
+    """Every enriched body, grouped by outlet: the input to sentence boilerplate."""
+    out: dict[str, list[str]] = {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ai.outlet, a.body
+            FROM articles a JOIN article_index ai ON ai.id = a.id
+            WHERE a.body IS NOT NULL AND a.body <> ''
+            ORDER BY ai.outlet, ai.id
+            """
+        )
+        for row in cur.fetchall():
+            out.setdefault(row["outlet"], []).append(row["body"])
+    return out
+
+
+def clusters_for_framing(conn: psycopg.Connection) -> list[dict]:
+    """Stored clusters with their members ranked, bodies included.
+
+    Members carry published_at so the job can rebuild the cluster's
+    order-indeterminate reason with nlp.dedup.build_cluster; the reason is
+    not stored. A cluster with fewer than two members with a body is skipped
+    by the caller, not here."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.cluster_id, c.origin_confident, c.shared_core_text,
+                   ai.id, ai.outlet, ai.title, ai.effective_at, ai.published_at,
+                   a.cluster_rank, a.body,
+                   a.delta_added, a.delta_removed, a.delta_summary,
+                   a.delta_summary_model, a.delta_summary_version
+            FROM dup_clusters c
+            JOIN articles a ON a.dup_cluster_id = c.cluster_id
+            JOIN article_index ai ON ai.id = a.id
+            ORDER BY c.first_published_at, c.cluster_id, a.cluster_rank, ai.id
+            """
+        )
+        rows = cur.fetchall()
+    clusters: dict[int, dict] = {}
+    for r in rows:
+        c = clusters.setdefault(
+            r["cluster_id"],
+            {
+                "cluster_id": r["cluster_id"],
+                "origin_confident": r["origin_confident"],
+                "shared_core_text": r["shared_core_text"],
+                "members": [],
+            },
+        )
+        c["members"].append(
+            {
+                k: v
+                for k, v in r.items()
+                if k not in ("cluster_id", "origin_confident", "shared_core_text")
+            }
+        )
+    return list(clusters.values())
+
+
+def save_framing(
+    conn: psycopg.Connection,
+    cluster_id: int,
+    core_text: str,
+    members: list[tuple[int, list[str], list[str], str | None]],
+) -> dict[str, int]:
+    """Write one cluster's core and per-member deltas; returns what changed.
+
+    `members` is (article_id, added, removed, rule_summary). The summary is
+    the cache for the LLM step: when a member's deltas change it is reset to
+    the rule string (origins, empty deltas) or to NULL, which is what marks
+    the row as pending. Unchanged deltas leave an existing summary alone, so
+    re-running `make framing` never re-spends quota.
+    """
+    from .nlp.summary import RULE_MODEL, SUMMARY_VERSION
+
+    counts = {"cores_set": 0, "deltas_set": 0, "summaries_reset": 0}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE dup_clusters SET shared_core_text = %(t)s
+             WHERE cluster_id = %(id)s AND shared_core_text IS DISTINCT FROM %(t)s
+            """,
+            {"id": cluster_id, "t": core_text},
+        )
+        counts["cores_set"] += cur.rowcount
+
+        for article_id, added, removed, rule in members:
+            cur.execute(
+                "SELECT delta_added, delta_removed, delta_summary, delta_summary_version "
+                "FROM articles WHERE id = %s",
+                (article_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                continue
+            deltas_changed = row["delta_added"] != list(added) or row["delta_removed"] != list(
+                removed
+            )
+            # A rule row is rewritten when its string or its version label is stale,
+            # so provenance never says an older version than the LLM rows beside it.
+            summary_wrong = rule is not None and (
+                row["delta_summary"] != rule or row["delta_summary_version"] != SUMMARY_VERSION
+            )
+            if not deltas_changed and not summary_wrong:
+                continue
+            if deltas_changed:
+                counts["deltas_set"] += 1
+            if deltas_changed or summary_wrong:
+                counts["summaries_reset"] += 1
+            cur.execute(
+                """
+                UPDATE articles
+                   SET delta_added = %(a)s, delta_removed = %(r)s,
+                       delta_summary = %(s)s,
+                       delta_summary_model = %(m)s,
+                       delta_summary_version = %(v)s,
+                       updated_at = now()
+                 WHERE id = %(id)s
+                """,
+                {
+                    "id": article_id,
+                    "a": list(added),
+                    "r": list(removed),
+                    "s": rule,
+                    "m": RULE_MODEL if rule is not None else None,
+                    "v": SUMMARY_VERSION if rule is not None else None,
+                },
+            )
+    return counts
+
+
+def save_summary(
+    conn: psycopg.Connection, article_id: int, summary: str, model: str, version: str
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE articles
+               SET delta_summary = %s, delta_summary_model = %s, delta_summary_version = %s,
+                   updated_at = now()
+             WHERE id = %s
+            """,
+            (summary, model, version, article_id),
+        )

@@ -136,9 +136,30 @@ def extract_body(html: str) -> str:
     for tag in node(["script", "style", "nav", "header", "footer", "aside", "iframe", "figure"]):
         tag.decompose()
 
-    paragraphs = [p.get_text(strip=True) for p in node.find_all("p")]
+    paragraphs = [p.get_text(strip=True) for p in node.find_all("p") if not _is_link_block(p)]
     text = "\n".join(p for p in paragraphs if p)
     return text or node.get_text("\n", strip=True)
+
+
+# A paragraph that is link text is navigation, not prose. The related-story
+# rails that the chrome strip above cannot reach live inside the article node
+# and are DIFFERENT on every page, so no per-outlet frequency rule catches
+# them either: tvbs wraps each rail item's <p> in an <a>; udn fills one <p> of
+# its 【全球熱話題】 box with <a>s. Measured over the cached corpus (2026-09-19):
+# this rule removes 68% of tvbs "body" (the rails), udn's box and a few
+# 更多鏡週刊報導 lines, and changes nothing at cna, ftv or chinatimes. A
+# paragraph with one inline link is far below the bar and is kept.
+_LINK_TEXT_FRACTION = 0.8
+
+
+def _is_link_block(p) -> bool:
+    if p.find_parent("a") is not None:
+        return True
+    text_len = len(p.get_text(strip=True))
+    if text_len == 0:
+        return False
+    link_len = sum(len(a.get_text(strip=True)) for a in p.find_all("a"))
+    return link_len >= _LINK_TEXT_FRACTION * text_len
 
 
 # Site names outlets append to og:title / <title>. Only consulted when a page

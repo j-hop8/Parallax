@@ -17,13 +17,29 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from ..settings import STANCE_MODEL, STANCE_RPM
+from .gemini import DailyQuotaExhausted, GeminiJSON, Pacer
+
+__all__ = [
+    "LABELS",
+    "PROMPT_VERSION",
+    "DailyQuotaExhausted",  # re-exported: raised out of classify(), callers catch it here
+    "GeminiStance",
+    "Pacer",
+    "StanceClassifier",
+    "StanceInput",
+    "StanceResult",
+    "body_excerpt",
+    "build_prompt",
+    "lede",
+    "parse_response",
+    "stance_input",
+]
 
 log = logging.getLogger(__name__)
 
@@ -61,24 +77,6 @@ class StanceClassifier(Protocol):
     prompt_version: str
 
     def classify(self, inp: StanceInput) -> StanceResult: ...
-
-
-class DailyQuotaExhausted(RuntimeError):
-    """The model's per-day free-tier quota is spent. Waiting a minute will not
-    help and neither will the next article; callers should stop the run.
-
-    Learned live: gemini-3.8-flash allows 20 requests/day on the free tier
-    (quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier). Without this
-    the job retried each remaining article through its full backoff and
-    recorded 170+ failures for nothing.
-    """
-
-    def __init__(self, model: str, quota_id: str, quota_value: str | None) -> None:
-        self.model, self.quota_id, self.quota_value = model, quota_id, quota_value
-        limit = f" (limit {quota_value}/day)" if quota_value else ""
-        super().__init__(
-            f"{model}: daily quota exhausted{limit}; stop and resume tomorrow or switch model"
-        )
 
 
 # ---- text preparation ------------------------------------------------------
@@ -200,78 +198,13 @@ def parse_response(text: str) -> tuple[str, float, str]:
 # ---- Gemini backend --------------------------------------------------------
 
 
-class Pacer:
-    """Hold a request rate. Same idea as crawl.http.Fetcher._wait, one host."""
-
-    def __init__(self, rpm: float, sleep: Callable[[float], None] = time.sleep) -> None:
-        self.min_interval = 60.0 / rpm if rpm > 0 else 0.0
-        self._sleep = sleep
-        self._last: float | None = None
-
-    def wait(self) -> None:
-        now = time.monotonic()
-        if self._last is not None:
-            gap = self.min_interval - (now - self._last)
-            if gap > 0:
-                self._sleep(gap)
-        self._last = time.monotonic()
-
-
-_RETRY_DELAY = re.compile(r"(\d+(?:\.\d+)?)s")
-
-
-def _daily_quota(exc: Exception) -> tuple[str, str | None] | None:
-    """(quotaId, quotaValue) when a 429 is a per-day quota, else None."""
-    if getattr(exc, "code", None) != 429:
-        return None
-    for entry in _walk(getattr(exc, "details", None)):
-        if isinstance(entry, dict) and "PerDay" in str(entry.get("quotaId", "")):
-            return str(entry["quotaId"]), (
-                str(entry["quotaValue"]) if "quotaValue" in entry else None
-            )
-    return None
-
-
-def _is_transient(exc: Exception) -> bool:
-    """429 and 5xx: the free tier rate-limits, and the first live run met a
-    503 "model is experiencing high demand" -- both heal by waiting."""
-    code = getattr(exc, "code", None)
-    return code == 429 or (isinstance(code, int) and 500 <= code < 600)
-
-
-def _retry_delay(exc: Exception, attempt: int, cap: float = 120.0) -> float:
-    """The server's RetryInfo hint when present, else exponential backoff.
-
-    Gemini's 429 body usually carries details[] with a RetryInfo entry like
-    {"retryDelay": "34s"}. Free-tier limits are per-account and unpublished,
-    so the hint is the only honest number; the fallback exists for when the
-    body is missing or shaped differently.
-    """
-    details = getattr(exc, "details", None)
-    for entry in _walk(details):
-        if isinstance(entry, dict) and "retryDelay" in entry:
-            match = _RETRY_DELAY.match(str(entry["retryDelay"]))
-            if match:
-                return min(cap, float(match.group(1)) + 1.0)
-    return min(cap, 10.0 * (2**attempt))
-
-
-def _walk(obj: Any):
-    if isinstance(obj, dict):
-        yield obj
-        for v in obj.values():
-            yield from _walk(v)
-    elif isinstance(obj, list):
-        for v in obj:
-            yield from _walk(v)
-
-
 class GeminiStance:
     """Stance via the Gemini API, JSON-schema constrained, paced for the free tier.
 
-    `client` is injectable so tests never touch the network; the real client
-    is built lazily so importing this module never requires the `llm` extra --
-    the crawler must keep installing without it.
+    The pacing, retry and daily-quota handling live in nlp.gemini; this class
+    owns only what is stance-specific: the system instruction, the schema, the
+    prompt and the parse. `client` and `sleep` pass straight through so the
+    tests here stay offline.
     """
 
     prompt_version = PROMPT_VERSION
@@ -285,54 +218,17 @@ class GeminiStance:
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.model = model
-        self.max_attempts = max_attempts
-        self._client = client
-        self._sleep = sleep
-        self._pacer = Pacer(rpm, sleep=sleep)
-
-    def _get_client(self) -> Any:
-        if self._client is None:
-            from google import genai  # reads GEMINI_API_KEY from the environment
-
-            self._client = genai.Client()
-        return self._client
-
-    def _config(self) -> dict[str, Any]:
-        # A plain dict, which the SDK coerces, so this module has no import-time
-        # dependency on google.genai.
-        return {
-            "system_instruction": SYSTEM_INSTRUCTION,
-            "response_mime_type": "application/json",
-            "response_json_schema": RESPONSE_SCHEMA,
-            "temperature": 0.0,
-            # No tools are declared; this only silences the SDK's warning that
-            # automatic function calling is on by default.
-            "automatic_function_calling": {"disable": True},
-        }
+        self._llm = GeminiJSON(
+            model,
+            rpm,
+            system_instruction=SYSTEM_INSTRUCTION,
+            schema=RESPONSE_SCHEMA,
+            client=client,
+            max_attempts=max_attempts,
+            sleep=sleep,
+            purpose="stance",
+        )
 
     def classify(self, inp: StanceInput) -> StanceResult:
-        prompt = build_prompt(inp)
-        for attempt in range(self.max_attempts):
-            self._pacer.wait()
-            try:
-                response = self._get_client().models.generate_content(
-                    model=self.model, contents=prompt, config=self._config()
-                )
-            except Exception as exc:
-                daily = _daily_quota(exc)
-                if daily is not None:
-                    raise DailyQuotaExhausted(self.model, *daily) from exc
-                if _is_transient(exc) and attempt < self.max_attempts - 1:
-                    delay = _retry_delay(exc, attempt)
-                    log.warning(
-                        "stance: %s from %s; sleeping %.0fs",
-                        getattr(exc, "code", type(exc).__name__),
-                        self.model,
-                        delay,
-                    )
-                    self._sleep(delay)
-                    continue
-                raise
-            label, confidence, evidence = parse_response(response.text)
-            return StanceResult(label, confidence, evidence, self.model, PROMPT_VERSION)
-        raise RuntimeError("unreachable: retry loop exhausted without raising")
+        label, confidence, evidence = parse_response(self._llm.generate(build_prompt(inp)))
+        return StanceResult(label, confidence, evidence, self.model, PROMPT_VERSION)

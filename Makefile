@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich stance stance.eval label dedup label.pairs dedup.eval
+.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -12,12 +12,14 @@ help:
 	@echo "crawl.one  run one outlet, e.g. make crawl.one OUTLET=cna"
 	@echo "health     per-outlet crawl health for the last 24h"
 	@echo "enrich     tier-2 body fetch for a keyword, e.g. make enrich KEYWORD=沈伯洋"
+	@echo "reextract  re-run body extraction over the raw HTML cache (no fetch) after a parser fix"
 	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"
 	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
 	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
 	@echo "dedup      rebuild near-duplicate clusters + propagation order (Q3); ARGS=--keyword X narrows"
 	@echo "label.pairs  hand-label candidate pairs into eval/dup_gold.csv (blind)"
 	@echo "dedup.eval   precision/recall of the clusterer against the pair gold set"
+	@echo "framing    per-cluster shared core + what each member added/dropped; ARGS=--summarize spends quota"
 	@echo "test       pytest"
 
 setup: dict
@@ -88,6 +90,11 @@ rollup:
 enrich:
 	uv run python -m parallax.jobs.enrich --keyword "$(KEYWORD)" $(ARGS)
 
+# The raw HTML cache exists so a parser fix never re-hits an outlet; this is
+# how the fix reaches every stored body. Follow with `make dedup && make framing`.
+reextract:
+	uv run python -m parallax.jobs.reextract $(ARGS)
+
 stance:
 	uv run python -m parallax.jobs.stance --keyword "$(KEYWORD)" $(ARGS)
 
@@ -106,6 +113,12 @@ label.pairs:
 
 dedup.eval:
 	uv run python -m parallax.jobs.eval_dedup $(ARGS)
+
+# Runs after dedup. Deterministic and local unless ARGS=--summarize, which is
+# the one model call in Q3: one line per member with a non-empty delta, cached
+# on the row until its deltas change.
+framing:
+	uv run python -m parallax.jobs.framing $(ARGS)
 
 # The query that answers "is tier-1 still working?". A zero or a stale last_run
 # here means data is being lost right now and cannot be backfilled.
