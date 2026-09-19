@@ -70,3 +70,9 @@ STANCE_RPM = float(os.environ.get("STANCE_RPM", "10"))
 # stance unless overridden; the quota is per model per day, so a busy stance
 # day can be given its own model here.
 FRAMING_MODEL = os.environ.get("FRAMING_MODEL", STANCE_MODEL)
+
+# Q2 fallback (T-010). When an incident's days are all incomplete, the weight
+# may be estimated against the outlet's median complete-day total -- but a
+# median over two days is not a baseline. The proposal says roughly ten days;
+# seven complete days is the floor before the estimate is shown at all.
+MIN_BASELINE_DAYS = int(os.environ.get("MIN_BASELINE_DAYS", "7"))
