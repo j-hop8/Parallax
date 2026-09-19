@@ -691,6 +691,27 @@ def stance_for_ids(
         return cur.fetchall()
 
 
+def stance_targets(conn: psycopg.Connection, model: str, prompt_version: str) -> list[dict]:
+    """Keywords that have stance rows at this model/prompt, most classified first.
+
+    The UI offers these as suggestions: stance is the one metric that needs a
+    model run per keyword, so a first-time viewer otherwise lands on a page
+    whose Q1 column is all dashes and cannot tell whether that is the data or
+    the system."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT target, count(*) AS n
+            FROM article_stance
+            WHERE model = %s AND prompt_version = %s
+            GROUP BY target
+            ORDER BY n DESC, target
+            """,
+            (model, prompt_version),
+        )
+        return cur.fetchall()
+
+
 def cluster_roles(conn: psycopg.Connection, ids: Iterable[int]) -> list[dict]:
     """One row per matched article that has a body: its cluster membership and
     whether that cluster's order may be claimed. Feeds originality and the

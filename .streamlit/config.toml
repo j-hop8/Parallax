@@ -1,0 +1,14 @@
+# The design page's palette (Design.pdf): cream paper, dark ink, purple accent.
+# Committed because the look is part of the deliverable, not a preference.
+[theme]
+base = "light"
+primaryColor = "#7B4DFF"
+backgroundColor = "#F5F0E8"
+secondaryBackgroundColor = "#EDE6D9"
+textColor = "#1D1B18"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true

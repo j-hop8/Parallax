@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report
+.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report ui
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -21,6 +21,7 @@ help:
 	@echo "dedup.eval   precision/recall of the clusterer against the pair gold set"
 	@echo "framing    per-cluster shared core + what each member added/dropped; ARGS=--summarize spends quota"
 	@echo "report     Q1-Q3 for one keyword as text, e.g. make report KEYWORD=沈伯洋 ARGS=\"--since 2026-08-20\""
+	@echo "ui         the same page in a browser (Streamlit, http://localhost:8501)"
 	@echo "test       pytest"
 
 setup: dict
@@ -126,6 +127,11 @@ framing:
 # so run `make rollup` first if the denominator looks stale.
 report:
 	uv run python -m parallax.jobs.report --keyword "$(KEYWORD)" $(ARGS)
+
+# Same report object, rendered. The `ui` extra pulls in streamlit and its
+# pandas/pyarrow tail, so it stays optional and is installed on first use.
+ui:
+	uv run --extra ui streamlit run src/parallax/ui/app.py
 
 # The query that answers "is tier-1 still working?". A zero or a stale last_run
 # here means data is being lost right now and cannot be backfilled.
