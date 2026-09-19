@@ -136,7 +136,12 @@ def extract_body(html: str) -> str:
     for tag in node(["script", "style", "nav", "header", "footer", "aside", "iframe", "figure"]):
         tag.decompose()
 
-    paragraphs = [p.get_text(strip=True) for p in node.find_all("p") if not _is_link_block(p)]
+    # Link blocks are removed from the tree, not just skipped, so the no-<p>
+    # fallback below cannot hand their text back (review finding, PR #10:
+    # a page whose only paragraphs are a rail would have returned the rail).
+    for p in [p for p in node.find_all("p") if _is_link_block(p)]:
+        p.decompose()
+    paragraphs = [p.get_text(strip=True) for p in node.find_all("p")]
     text = "\n".join(p for p in paragraphs if p)
     return text or node.get_text("\n", strip=True)
 

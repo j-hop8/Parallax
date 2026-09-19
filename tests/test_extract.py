@@ -129,6 +129,15 @@ def test_paragraph_made_of_links_is_navigation_not_prose():
     assert body.split("\n") == ["正文第一段，內容充實。", "詳情請見相關報導，記者會持續追蹤。"]
 
 
+def test_a_page_whose_only_paragraphs_are_links_does_not_leak_them_via_the_fallback():
+    """Review finding (PR #10): with every <p> rejected, the no-paragraph
+    fallback read node.get_text() and returned the rail after all."""
+    body = extract_body(
+        "<html><body><article><p><a href='/x'>其他文章的標題</a></p></article></body></html>"
+    )
+    assert "其他文章的標題" not in body
+
+
 @pytest.mark.parametrize("code", ["cna", "ftv", "chinatimes"])
 def test_link_rule_leaves_outlets_without_rails_untouched(code: str):
     """Measured on the cached corpus: these three lose zero characters."""

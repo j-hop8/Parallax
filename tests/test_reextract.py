@@ -15,7 +15,10 @@ from parallax.settings import DATABASE_URL
 
 OUTLET = "__reextract_test__"
 T0 = datetime(2030, 1, 1, tzinfo=UTC)
-PROSE = "這是一段足夠長的正文，用來確保萃取結果超過最低字數門檻，所以再多寫幾個字以策安全，並且加上更多描述性內容讓長度合格。" * 2
+PROSE = (
+    "這是一段足夠長的正文，用來確保萃取結果超過最低字數門檻，所以再多寫幾個字以策安全，並且加上更多描述性內容讓長度合格。"
+    * 2
+)
 
 
 class _NoCommit:

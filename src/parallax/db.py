@@ -349,15 +349,21 @@ def replace_clusters(
 
     T-009's columns are cleared, never computed, here: a member that moves to
     another cluster or leaves one has deltas that compare it to the wrong
-    text, and a cluster whose membership changed has a stale core. A rank
-    change inside the same cluster keeps them -- `make framing` recomputes
-    and clears the summary only if the deltas actually differ, so quota is
-    not re-spent on a no-op.
+    text, and a cluster whose membership changed has a stale core. Deltas are
+    relative to a reference -- the origin, or the core when the order is
+    indeterminate -- so when a cluster's origin or its `origin_confident`
+    flips, every member's deltas and summary go too: a member joining inside
+    the noise floor would otherwise leave directional `delta_removed` rows on
+    a cluster the UI must now present as unordered (invariant 5). A rank
+    change that moves neither keeps them -- `make framing` recomputes and
+    clears the summary only if the deltas actually differ, so quota is not
+    re-spent on a no-op.
     """
     counts = {
         "clusters_upserted": 0,
         "clusters_deleted": 0,
         "members_set": 0,
+        "members_reset": 0,  # framing cleared because the cluster's reference changed
         "members_detached": 0,
     }
     desired: dict[int, tuple[int, bool, int]] = {}
@@ -368,6 +374,27 @@ def replace_clusters(
 
     with conn.cursor() as cur:
         for c in clusters:
+            cur.execute(
+                "SELECT origin_article_id, origin_confident FROM dup_clusters WHERE cluster_id = %s",
+                (c.cluster_id,),
+            )
+            stored = cur.fetchone()
+            if stored is not None and (
+                stored["origin_article_id"] != c.origin.article_id
+                or stored["origin_confident"] != c.origin_confident
+            ):
+                cur.execute(
+                    """
+                    UPDATE articles
+                       SET delta_added = NULL, delta_removed = NULL, delta_summary = NULL,
+                           delta_summary_model = NULL, delta_summary_version = NULL
+                     WHERE dup_cluster_id = %s
+                       AND (delta_added IS NOT NULL OR delta_removed IS NOT NULL
+                            OR delta_summary IS NOT NULL)
+                    """,
+                    (c.cluster_id,),
+                )
+                counts["members_reset"] += cur.rowcount
             cur.execute(
                 """
                 INSERT INTO dup_clusters

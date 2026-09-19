@@ -60,7 +60,9 @@ false the stored deltas must not encode a direction either.
   print the design's block per cluster (core excerpt, then per member
   `原始稿源` / `＋ − ～` lines). `--keyword` narrows the readout.
   `db.replace_clusters` clears deltas and summary on any member whose
-  cluster assignment changed, so `make dedup` cannot leave stale deltas.
+  cluster assignment changed, and on every member of a cluster whose origin
+  or `origin_confident` changed (the reference the deltas were computed
+  against), so `make dedup` cannot leave stale or directional deltas behind.
 - `delta_summary`: LLM, one line of Traditional Chinese per follower with a
   non-empty delta, from the headline pair and the ＋/− lists -- never the
   outlet name (same reason as stance). Only on `make framing ARGS=--summarize`;
@@ -75,7 +77,10 @@ false the stored deltas must not encode a direction either.
 ## Files in scope
 
 - `src/parallax/crawl/extract.py`, `src/parallax/jobs/reextract.py`
-- `src/parallax/nlp/framing.py`, `src/parallax/nlp/gemini.py`,
+- `src/parallax/nlp/framing.py`, `src/parallax/nlp/summary.py` (the prompt,
+  its version and the Gemini backend for `delta_summary` -- kept out of the
+  pure module; added to this list in review round 1, it was implied by the
+  Design section but not written here), `src/parallax/nlp/gemini.py`,
   `src/parallax/nlp/stance.py` (extract the shared client only)
 - `src/parallax/jobs/framing.py`, `src/parallax/db.py`
 - `db/schema.sql`, `db/migrations/002_delta_summary_provenance.sql`

@@ -108,6 +108,7 @@ def test_second_run_touches_nothing_and_changes_are_reconciled(conn):
         "clusters_upserted": 0,
         "clusters_deleted": 0,
         "members_set": 0,
+        "members_reset": 0,
         "members_detached": 0,
     }
 

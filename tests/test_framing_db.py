@@ -21,6 +21,7 @@ from parallax.nlp.summary import ORIGIN_SUMMARY, RULE_MODEL, SUMMARY_VERSION
 from parallax.settings import DATABASE_URL
 
 OUTLET = "__framing_test__"
+OUTLET_B = "__framing_test_b__"  # build_cluster calls a same-outlet pair indeterminate
 T0 = datetime(2030, 1, 1, tzinfo=UTC)
 
 
@@ -33,10 +34,12 @@ def conn():
     try:
         connection.autocommit = False
         with connection.cursor() as cur:
-            cur.execute(
-                "INSERT INTO outlets (code, name_zh, home_url) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                (OUTLET, "test", "https://example.com/"),
-            )
+            for code in (OUTLET, OUTLET_B):
+                cur.execute(
+                    "INSERT INTO outlets (code, name_zh, home_url) VALUES (%s,%s,%s) "
+                    "ON CONFLICT DO NOTHING",
+                    (code, "test", "https://example.com/"),
+                )
         yield connection
     finally:
         connection.rollback()
@@ -70,9 +73,9 @@ def _articles(conn, n: int) -> list[int]:
     return ids
 
 
-def _member(aid, minutes):
+def _member(aid, minutes, outlet=OUTLET):
     t = T0 + timedelta(minutes=minutes)
-    return Member(aid, OUTLET, t, t)
+    return Member(aid, outlet, t, t)
 
 
 def _row(conn, aid):
@@ -154,6 +157,41 @@ def test_replace_clusters_clears_framing_when_a_member_moves_but_not_on_a_rank_c
     rb = _row(conn, b)
     assert rb["dup_cluster_id"] is None and rb["delta_added"] is None
     assert rb["delta_summary"] is None and rb["delta_summary_version"] is None
+
+
+def test_a_member_inside_the_noise_floor_flips_confidence_and_clears_every_delta(conn):
+    """Review finding (PR #10): same cluster_id, but the reference changed.
+    b->c was confident with directional deltas; d lands 2 min after b, the
+    cluster becomes indeterminate, and c's `delta_removed` would otherwise
+    survive until the next `make framing` -- a stored claim invariant 5 forbids."""
+    a, b, c, d = _articles(conn, 4)
+    confident = build_cluster([_member(b, 0), _member(c, 10, OUTLET_B)])
+    assert confident.origin_confident
+    db.replace_clusters(conn, [confident], [a, b, c, d])
+    db.save_framing(conn, b, "甲。", [(b, [], [], ORIGIN_SUMMARY), (c, ["乙。"], ["丙。"], None)])
+    db.save_summary(conn, c, "－ 刪除丙。", "m", SUMMARY_VERSION)
+
+    flipped = build_cluster([_member(b, 0), _member(d, 2, OUTLET_B), _member(c, 10, OUTLET_B)])
+    assert not flipped.origin_confident and flipped.cluster_id == b
+    counts = db.replace_clusters(conn, [flipped], [a, b, c, d])
+    assert counts["members_reset"] == 2  # b and c had framing; d had none yet
+    for aid in (b, c):
+        r = _row(conn, aid)
+        assert r["dup_cluster_id"] == b
+        assert r["delta_added"] is None and r["delta_removed"] is None
+        assert r["delta_summary"] is None and r["delta_summary_version"] is None
+
+    # A new origin with the same cluster_id clears too (b keeps the min id).
+    db.replace_clusters(conn, [confident], [a, b, c, d])
+    db.save_framing(conn, b, "甲。", [(b, [], [], ORIGIN_SUMMARY), (c, ["乙。"], [], None)])
+    reordered = build_cluster([_member(c, 0, OUTLET_B), _member(b, 10)])  # c now first
+    assert reordered.origin_confident and reordered.cluster_id == b
+    counts = db.replace_clusters(conn, [reordered], [a, b, c, d])
+    assert counts["members_reset"] == 2
+    assert _row(conn, b)["delta_summary"] is None
+
+    # The same cluster again: nothing to reset.
+    assert db.replace_clusters(conn, [reordered], [a, b, c, d])["members_reset"] == 0
 
 
 def test_clusters_for_framing_groups_members_in_rank_order(conn):
