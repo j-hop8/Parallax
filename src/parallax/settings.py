@@ -64,3 +64,9 @@ MIN_DAILY_DENOMINATOR = 20
 # https://aistudio.google.com/rate-limit before raising either value.
 STANCE_MODEL = os.environ.get("STANCE_MODEL", "gemini-3.5-flash-lite")
 STANCE_RPM = float(os.environ.get("STANCE_RPM", "10"))
+
+# Q3 framing summary (T-009): one line per cluster member with a non-empty
+# delta, only on `make framing ARGS=--summarize`. Same model and pacing as
+# stance unless overridden; the quota is per model per day, so a busy stance
+# day can be given its own model here.
+FRAMING_MODEL = os.environ.get("FRAMING_MODEL", STANCE_MODEL)

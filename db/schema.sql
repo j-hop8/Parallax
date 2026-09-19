@@ -87,9 +87,14 @@ CREATE TABLE IF NOT EXISTS articles (
     is_cluster_origin BOOLEAN NOT NULL DEFAULT FALSE,
     cluster_rank      INT,
 
-    delta_added   TEXT[],                     -- sentences this member added to the shared core
-    delta_removed TEXT[],                     -- shared-core sentences this member dropped
-    delta_summary TEXT,                       -- one-line prose summary (LLM), cached
+    -- T-009. Relative to the origin when dup_clusters.origin_confident, else to
+    -- the shared core -- and then delta_removed is always empty, because the
+    -- data must not encode a direction the timestamps cannot support.
+    delta_added   TEXT[],                     -- sentences this member ran that the reference did not
+    delta_removed TEXT[],                     -- reference sentences this member dropped
+    delta_summary TEXT,                       -- one line (LLM, or a fixed string); cleared when deltas change
+    delta_summary_model   TEXT,               -- 'rule' for the fixed strings
+    delta_summary_version TEXT,               -- parallax.nlp.summary.SUMMARY_VERSION at write time
 
     stance_label  TEXT CHECK (stance_label IN ('neg', 'neu', 'pos')),
     stance_score  REAL,
