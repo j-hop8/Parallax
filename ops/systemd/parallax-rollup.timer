@@ -1,0 +1,14 @@
+# 00:20 Taipei, stated in the calendar spec so the host's own zone (UTC on
+# most VPS images) does not matter -- the same reason every day bucket in the
+# SQL says AT TIME ZONE 'Asia/Taipei'. Persistent=true: a rollup missed
+# during a reboot runs at boot, so yesterday still gets its flag.
+[Unit]
+Description=Parallax daily rollup at 00:20 Asia/Taipei
+
+[Timer]
+OnCalendar=*-*-* 00:20:00 Asia/Taipei
+Persistent=true
+Unit=parallax-rollup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,12 +1,14 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: sched.install sched.uninstall help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report ui
+.PHONY: sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report ui
 
 help:
 	@echo "setup      install deps into .venv via uv"
 	@echo "db.up      start Postgres (docker compose)"
 	@echo "db.migrate apply db/schema.sql (idempotent)"
+	@echo "db.dump    pg_dump -Fc into backups/ (the migration + the daily VPS backup)"
+	@echo "db.restore restore a dump: make db.restore FILE=backups/parallax-….dump"
 	@echo "audit      T-002: probe outlet feeds + robots.txt  [no DB needed]"
 	@echo "crawl      run the tier-1 listing crawl once"
 	@echo "crawl.one  run one outlet, e.g. make crawl.one OUTLET=cna"
@@ -23,6 +25,8 @@ help:
 	@echo "report     Q1-Q3 for one keyword as text, e.g. make report KEYWORD=沈伯洋 ARGS=\"--since 2026-08-20\""
 	@echo "ui         the same page in a browser (Streamlit, http://localhost:8501)"
 	@echo "test       pytest"
+	@echo "sched.install  schedule crawl+rollup on this host: launchd on macOS, systemd on Linux"
+	@echo "ops.check  verify the systemd units + the Linux runtime in Docker (no VPS needed)"
 
 setup: dict
 	uv sync
@@ -150,9 +154,28 @@ health:
 	@echo "-- anything past ~1h is coverage this project can never get back."
 	@$(PSQL) -tc "SELECT count(*) FILTER (WHERE NOT ok) || ' failed runs in 24h' FROM crawl_runs WHERE started_at > now() - interval '24 hours';"
 
-# Install the launchd agents and remove the cron entries, so the two can never
-# double-run. launchd is used because it re-runs a job missed during sleep.
+# One entry point per host kind. macOS: launchd (re-runs a job missed during
+# sleep). Linux: systemd timers with Persistent=true, the same property. The
+# recipes below are unchanged from before the split; only the dispatch is new.
+UNAME := $(shell uname -s)
+
 sched.install:
+ifeq ($(UNAME),Darwin)
+	@$(MAKE) --no-print-directory sched.install.launchd
+else
+	@$(MAKE) --no-print-directory sched.install.systemd
+endif
+
+sched.uninstall:
+ifeq ($(UNAME),Darwin)
+	@$(MAKE) --no-print-directory sched.uninstall.launchd
+else
+	@$(MAKE) --no-print-directory sched.uninstall.systemd
+endif
+
+# Install the launchd agents and remove the cron entries, so the two can never
+# double-run.
+sched.install.launchd:
 	@mkdir -p ~/Library/LaunchAgents logs
 	@UV=$$(command -v uv); \
 	if [ -z "$$UV" ]; then \
@@ -186,12 +209,98 @@ sched.install:
 	@rm -f /tmp/parallax-crontab.current
 	@launchctl list | grep parallax || true
 
-sched.uninstall:
+sched.uninstall.launchd:
 	@for j in crawl rollup; do \
 		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
 		rm -f ~/Library/LaunchAgents/com.parallax.$$j.plist; \
 	done
 	@echo "launchd agents removed"
+
+# Linux (the VPS). Renders ops/systemd/* with absolute paths and the invoking
+# user, installs them system-wide (sudo for the copy and systemctl only; the
+# jobs themselves run as $(id -un), who must be in the docker group), and
+# enables the three timers. Idempotent: re-run after `git pull` if a unit
+# changed. See ops/README.md for the cutover order.
+SYSTEMD_DIR := /etc/systemd/system
+SYSTEMD_UNITS := $(notdir $(wildcard ops/systemd/parallax-*.service ops/systemd/parallax-*.timer))
+SYSTEMD_TIMERS := parallax-crawl.timer parallax-rollup.timer parallax-backup.timer
+
+sched.install.systemd:
+	@UV=$$(command -v uv); \
+	if [ -z "$$UV" ]; then \
+		echo "uv not found on PATH -- refusing to install a unit that cannot run" >&2; \
+		exit 1; \
+	fi; \
+	mkdir -p backups; \
+	for u in $(SYSTEMD_UNITS); do \
+		sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" -e "s#@@USER@@#$$(id -un)#g" \
+			ops/systemd/$$u | sudo tee $(SYSTEMD_DIR)/$$u >/dev/null || exit 1; \
+		echo "installed $(SYSTEMD_DIR)/$$u"; \
+	done
+	@sudo systemctl daemon-reload
+	@sudo systemctl enable --now $(SYSTEMD_TIMERS)
+	@systemctl list-timers 'parallax-*' --no-pager
+
+sched.uninstall.systemd:
+	@sudo systemctl disable --now $(SYSTEMD_TIMERS) 2>/dev/null || true
+	@for u in $(SYSTEMD_UNITS); do sudo rm -f $(SYSTEMD_DIR)/$$u; done
+	@sudo systemctl daemon-reload
+	@echo "systemd units removed"
+
+# ---- backups / migration ----------------------------------------------------
+# Tier-1 rows cannot be re-fetched, so the database is the only copy of the
+# denominator. `-Fc` is compressed and restorable table-by-table. The VPS
+# backup timer runs exactly this target.
+BACKUP_DIR := backups
+
+db.dump:
+	@mkdir -p $(BACKUP_DIR)
+	@f=$(BACKUP_DIR)/parallax-$$(date -u +%Y%m%dT%H%M%SZ).dump; \
+	$(DC) exec -T db pg_dump -U parallax -Fc parallax > $$f && ls -la $$f
+
+# Destructive on the target database: --clean drops every object in the dump
+# before recreating it. Point it at a throwaway project to rehearse:
+#   PARALLAX_DB_PORT=5434 docker compose -p pxdrill up -d db
+#   make db.restore DC="docker compose -p pxdrill" FILE=backups/parallax-….dump
+db.restore:
+	@test -n "$(FILE)" || { echo "usage: make db.restore FILE=backups/parallax-….dump" >&2; exit 1; }
+	@$(DC) exec -T db pg_restore -U parallax -d parallax --clean --if-exists --no-owner < "$(FILE)"
+	@$(DC) exec -T db psql -U parallax -d parallax -tAc \
+		"SELECT count(*) || ' article_index rows, ' || (SELECT count(*) FROM outlet_daily_totals WHERE complete) || ' complete outlet-days' FROM article_index;"
+
+# ---- ops.check: verify the Linux packaging without a Linux host ----------
+# This Mac has no systemd, so the rendered units are checked by systemd's own
+# parser inside ubuntu:24.04 (with stub executables and the service user in
+# place, because `systemd-analyze verify` resolves both). Then the runtime:
+# uv sync from the lockfile and a real dry-run crawl of cna inside the
+# official uv image, proving the Linux wheels and the feeds work from a
+# container -- the closest thing to the VPS that runs on a laptop.
+OPS_CHECK := .ops-check
+
+ops.check:
+	@rm -rf $(OPS_CHECK) && mkdir -p $(OPS_CHECK)/units
+	@for u in $(SYSTEMD_UNITS); do \
+		sed -e "s#@@ROOT@@#/srv/parallax#g" -e "s#@@UV@@#/usr/local/bin/uv#g" -e "s#@@USER@@#parallax#g" \
+			ops/systemd/$$u > $(OPS_CHECK)/units/$$u; \
+	done
+	@echo "-- systemd-analyze verify (ubuntu:24.04)"
+	@docker run --rm -v "$(CURDIR)/$(OPS_CHECK)/units:/units:ro" ubuntu:24.04 bash -euc '\
+		export DEBIAN_FRONTEND=noninteractive; \
+		apt-get update -qq >/dev/null && apt-get install -y -qq systemd make >/dev/null; \
+		useradd -r parallax; mkdir -p /srv/parallax/backups; \
+		install -m755 /dev/null /usr/local/bin/uv; \
+		cp /units/* /etc/systemd/system/; \
+		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer \
+			&& echo "6 units verified (verify prints nothing when clean)"; \
+		systemd-analyze calendar "*:0/20" "*-*-* 00:20:00 Asia/Taipei" "*-*-* 03:00:00 Asia/Taipei" | grep -E "Normalized|Next elapse"'
+	@echo "-- Linux runtime: uv sync + dry-run crawl of cna (ghcr.io/astral-sh/uv:python3.12-bookworm-slim)"
+	@docker run --rm -v "$(CURDIR):/src:ro" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -euc '\
+		tar -C /src --exclude=.venv --exclude=raw --exclude=logs --exclude=backups --exclude=graphify-out \
+			--exclude=$(OPS_CHECK) --exclude=.git -cf - . | tar -xf -; \
+		uv sync --frozen --no-dev -q; \
+		uv run --no-sync python -m parallax.jobs.crawl_listing --outlet cna --dry-run --wait-network 0'
+	@rm -rf $(OPS_CHECK)
+	@echo "ops.check OK"
 
 test:
 	uv run pytest -q

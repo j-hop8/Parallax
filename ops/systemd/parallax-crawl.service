@@ -1,0 +1,21 @@
+# Tier-1 listing crawl. Rendered by `make sched.install` (Linux branch):
+# @@ROOT@@, @@UV@@ and @@USER@@ are substituted with absolute values, because
+# systemd expands neither $HOME nor a shell profile.
+#
+# Type=oneshot means a run that is still going when the timer fires again is
+# simply not started twice -- the plist's AbandonProcessGroup=false, for free.
+# TimeoutStartSec is a backstop, not a budget: the per-outlet budget in
+# outlets.yaml already keeps a worst-case cycle under the 20-minute interval
+# (tests/test_crawl_health.py proves it).
+[Unit]
+Description=Parallax tier-1 listing crawl
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@@USER@@
+WorkingDirectory=@@ROOT@@
+ExecStart=@@UV@@ run python -m parallax.jobs.crawl_listing
+TimeoutStartSec=19min
+# The crawl reads .env itself (settings.py); nothing to pass here.

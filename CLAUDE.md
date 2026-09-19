@@ -25,7 +25,8 @@ the full rationale and `Design.pdf` for the target UI.
    it, because articles published during a long sleep scroll out of the feeds and
    are gone. If `make health` shows multi-hour gaps, move the crawl to an
    always-on host — that is the only real fix, and no amount of code substitutes
-   for it.
+   for it. T-013 packaged it: `ops/systemd/` + `make sched.install` on Linux,
+   `ops/README.md` is the cutover; `make ops.check` verifies the packaging here.
 
 3. **Days are `Asia/Taipei`, never UTC.** Bucketing by UTC misfiles everything
    published after 08:00 local and corrupts the denominator.

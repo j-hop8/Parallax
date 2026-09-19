@@ -144,6 +144,48 @@ one, that is a finding for the ticket, not an edit), `db/**`, `tests/**`,
 - `T-012-ci-workflow.md` is in `done/`.
 - `uv run pytest -q` and `uv run ruff check .` clean.
 
+## Live (2026-09-19, this Mac; the VPS does not exist yet)
+
+`make ops.check`: `systemd-analyze verify` clean on all six rendered units
+(with stub `uv`, the `parallax` user and `/srv/parallax` in place, since
+verify resolves executables, users and working directories); calendar specs
+normalize to `*-*-* *:00/20:00`, `00:20 Asia/Taipei → 16:20 UTC`, `03:00
+Asia/Taipei → 19:00 UTC`. The Linux runtime stage synced from the lockfile
+and the dry-run crawl of cna returned `fetched=214 distinct_urls=214` from
+inside `python3.12-bookworm-slim`. First run took ~25 min on this
+connection, almost all of it pulling the two images; later runs are a
+minute or two (apt installs systemd each time).
+
+Restore drill, exactly as the runbook's §4: `make db.dump` → 6.4 MB;
+`PARALLAX_DB_PORT=5434 docker compose -p pxdrill up -d db`; `make db.restore
+DC="docker compose -p pxdrill" FILE=…` → `32831 article_index rows, 16
+complete outlet-days`, equal to the source. That drill found the one thing
+the ticket did not anticipate: `container_name: parallax-db` in compose made
+a second project impossible, so it is gone (compose now names the container
+`parallax-db-1`; nothing referenced the fixed name). The production
+container was then recreated on the new file and is bound to
+`127.0.0.1:5433` with all rows intact.
+
+`TZ=UTC uv run pytest tests/test_rollup.py tests/test_report_db.py`: 9
+passed. Full suite 259, ruff clean. `make sched.install` on this Mac
+dispatches to the unchanged launchd recipe (`make -n` shows it).
+
+## Knowingly not done
+
+- **The cutover itself.** Everything up to the host boundary is verified;
+  §5–§9 of the runbook run on a VPS that has not been provisioned. When it
+  is, the numbers to record here are the first `make health` on the VPS and
+  the first new `complete = true` outlet-day.
+- No alerting. `make health` over the tunnel is the check; a failed timer
+  is visible in `systemctl list-timers` and the journal, but nothing pages
+  anyone. A `OnFailure=` unit that posts somewhere is a follow-up once there
+  is a somewhere.
+- Backups stay on the VPS disk. Off-host copies (`rclone` to object
+  storage) are a follow-up; the dumps are 6 MB, so even a weekly `scp` to
+  the laptop would do until then.
+- The laptop's launchd path is untouched and still runs; it is retired at
+  runbook §5, by hand, at the moment of cutover.
+
 ## Verify
 
 ```bash

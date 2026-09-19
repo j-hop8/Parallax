@@ -1,0 +1,11 @@
+# 03:00 Taipei, after the rollup, in the quietest hour of the feeds.
+[Unit]
+Description=Parallax daily database dump at 03:00 Asia/Taipei
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Taipei
+Persistent=true
+Unit=parallax-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+# Daily pg_dump of the only copy of the tier-1 index. Same command as
+# `make db.dump`, then prune dumps older than 14 days. 48 MB and seconds at
+# the time of writing; check `du -sh backups/` if the retention ever needs
+# revisiting.
+[Unit]
+Description=Parallax daily database dump
+After=docker.service
+
+[Service]
+Type=oneshot
+User=@@USER@@
+WorkingDirectory=@@ROOT@@
+ExecStart=/usr/bin/make db.dump
+ExecStartPost=/usr/bin/find @@ROOT@@/backups -name 'parallax-*.dump' -mtime +14 -delete
+TimeoutStartSec=15min
