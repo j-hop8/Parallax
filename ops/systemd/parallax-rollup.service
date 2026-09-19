@@ -1,0 +1,13 @@
+# Daily denominator: outlet_daily_totals for Asia/Taipei days, with the
+# completeness flag from crawl_runs gaps. Idempotent; recomputes a trailing
+# window, so running it twice or late is harmless.
+[Unit]
+Description=Parallax daily rollup (outlet_daily_totals)
+After=docker.service
+
+[Service]
+Type=oneshot
+User=@@USER@@
+WorkingDirectory=@@ROOT@@
+ExecStart=@@UV@@ run python -m parallax.jobs.rollup_daily
+TimeoutStartSec=10min

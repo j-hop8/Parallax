@@ -8,17 +8,24 @@
 services:
   db:
     image: postgres:16
-    container_name: parallax-db
+    # No container_name: a fixed name forbids a second project on the same
+    # host, and the restore drill (ops/README.md §4) needs exactly that.
     restart: unless-stopped
     environment:
       POSTGRES_DB: parallax
       POSTGRES_USER: parallax
-      POSTGRES_PASSWORD: parallax   # local-only dev credential; not a secret
+      # "parallax" is the laptop default and fine behind the loopback bind
+      # below. On a shared host set PARALLAX_DB_PASSWORD in .env (compose reads
+      # it from this directory; so does settings.py for the URL).
+      POSTGRES_PASSWORD: ${PARALLAX_DB_PASSWORD:-parallax}
       # Postgres bakes the collation into initdb, so it is pinned here rather
       # than inherited from whatever locale the host happens to have.
       LANG: C.UTF-8
     ports:
-      - "5433:5432"   # 5433 on the host, so a future local Postgres cannot clash
+      # Loopback only: on a VPS an unqualified "5433:5432" is a public Postgres.
+      # 5433 so a future native Postgres cannot clash; PARALLAX_DB_PORT exists
+      # for a second, throwaway project (the restore drill in ops/README.md).
+      - "127.0.0.1:${PARALLAX_DB_PORT:-5433}:5432"
     volumes:
       - parallax_pgdata:/var/lib/postgresql/data
       # No bind mount for db/: Docker Desktop on macOS silently presents an

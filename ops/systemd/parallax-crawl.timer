@@ -1,0 +1,17 @@
+# Every 20 minutes, on the clock. Persistent=true is why systemd rather than
+# cron: a slot missed because the host was down runs as soon as it is back,
+# which is exactly the property launchd's StartInterval gave us on macOS.
+# Articles published during a gap scroll out of the feeds and cannot be
+# re-fetched, so every missed slot is permanent loss (CLAUDE.md invariant 1).
+[Unit]
+Description=Parallax tier-1 listing crawl, every 20 minutes
+
+[Timer]
+OnCalendar=*:0/20
+OnBootSec=1min
+Persistent=true
+AccuracySec=10s
+Unit=parallax-crawl.service
+
+[Install]
+WantedBy=timers.target

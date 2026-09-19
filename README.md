@@ -12,3 +12,6 @@ make enrich KEYWORD=沈伯洋 && make dedup && make framing && make stance KEYWO
 make report KEYWORD=沈伯洋                     # Q1–Q3 as text
 make ui                                        # the same page at http://localhost:8501
 ```
+
+Tier 1 must run on an always-on host (CLAUDE.md invariant 1a); the packaging
+and the cutover checklist are in [ops/README.md](ops/README.md).
