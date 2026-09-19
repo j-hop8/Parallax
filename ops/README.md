@@ -69,6 +69,7 @@ On the laptop:
 
 ```bash
 make db.dump                                   # backups/parallax-<stamp>.dump
+ssh parallax@<vps> mkdir -p parallax/backups    # nothing has created it on the VPS yet
 scp backups/parallax-*.dump parallax@<vps>:~/parallax/backups/
 ```
 
@@ -77,7 +78,7 @@ cannot touch the real database:
 
 ```bash
 PARALLAX_DB_PORT=5434 docker compose -p pxdrill up -d db
-make db.restore DC="docker compose -p pxdrill" FILE=backups/parallax-<stamp>.dump
+make db.restore DC="docker compose -p pxdrill" FILE=backups/parallax-<stamp>.dump   # waits for pg_isready first
 # expect: "<N> article_index rows, 16 complete outlet-days" -- same N as the laptop
 docker compose -p pxdrill down -v
 ```
@@ -126,18 +127,26 @@ ssh -N -L 5433:127.0.0.1:5433 parallax@<vps>    # keep this terminal open (or au
 ```
 
 Laptop `.env` needs `PARALLAX_DATABASE_URL` with the VPS password (host
-stays `127.0.0.1:5433`). Then, unchanged:
+stays `127.0.0.1:5433`). Everything that goes through psycopg works
+unchanged over the tunnel:
 
 ```bash
-make health                    # now reads the VPS database
 make report KEYWORD=沈伯洋
 make ui
 make enrich KEYWORD=…          # tier 2 still runs here; bodies land in the VPS db
 ```
 
+`make health` is the exception: it runs `docker compose exec`, so it only
+works on the host that owns the container. From the laptop:
+
+```bash
+ssh parallax@<vps> make -C parallax health
+```
+
 ## 9. Day-after checks
 
-- `make health`: every outlet's `largest_gap` under an hour, 70+ ok runs.
+- `ssh parallax@<vps> make -C parallax health`: every outlet's `largest_gap`
+  under an hour, 70+ ok runs.
 - `outlet_daily_totals`: the first new `complete = true` rows appear after
   the 00:20 rollup; `make report` rows move from `2 / N 天` to `3 / N 天`.
 - `ls backups/` on the VPS: one dump per day from 03:00 Taipei; older than
@@ -147,7 +156,7 @@ make enrich KEYWORD=…          # tier 2 still runs here; bodies land in the VP
 
 | Need | Command (on the VPS) |
 |---|---|
-| Is tier 1 alive? | `make health` -- `largest_gap` is the number that matters |
+| Is tier 1 alive? | `make health` (or from the laptop `ssh parallax@<vps> make -C parallax health`) -- `largest_gap` is the number that matters |
 | Logs | `journalctl -u parallax-crawl -f`, `journalctl -u parallax-rollup -n 50` |
 | Timers | `systemctl list-timers 'parallax-*'` |
 | Deploy a change | `git pull && uv sync` -- timers pick it up on the next run; `make sched.install` again only if a unit file changed |

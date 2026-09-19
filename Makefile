@@ -262,7 +262,7 @@ db.dump:
 # before recreating it. Point it at a throwaway project to rehearse:
 #   PARALLAX_DB_PORT=5434 docker compose -p pxdrill up -d db
 #   make db.restore DC="docker compose -p pxdrill" FILE=backups/parallax-….dump
-db.restore:
+db.restore: db.wait
 	@test -n "$(FILE)" || { echo "usage: make db.restore FILE=backups/parallax-….dump" >&2; exit 1; }
 	@$(DC) exec -T db pg_restore -U parallax -d parallax --clean --if-exists --no-owner < "$(FILE)"
 	@$(DC) exec -T db psql -U parallax -d parallax -tAc \
@@ -290,15 +290,17 @@ ops.check:
 		useradd -r parallax; mkdir -p /srv/parallax/backups; \
 		install -m755 /dev/null /usr/local/bin/uv; \
 		cp /units/* /etc/systemd/system/; \
-		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer \
-			&& echo "6 units verified (verify prints nothing when clean)"; \
+		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer; \
+		echo "6 units verified (verify prints nothing when clean)"; \
 		systemd-analyze calendar "*:0/20" "*-*-* 00:20:00 Asia/Taipei" "*-*-* 03:00:00 Asia/Taipei" | grep -E "Normalized|Next elapse"'
 	@echo "-- Linux runtime: uv sync + dry-run crawl of cna (ghcr.io/astral-sh/uv:python3.12-bookworm-slim)"
 	@docker run --rm -v "$(CURDIR):/src:ro" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -euc '\
 		tar -C /src --exclude=.venv --exclude=raw --exclude=logs --exclude=backups --exclude=graphify-out \
 			--exclude=$(OPS_CHECK) --exclude=.git -cf - . | tar -xf -; \
 		uv sync --frozen --no-dev -q; \
-		uv run --no-sync python -m parallax.jobs.crawl_listing --outlet cna --dry-run --wait-network 0'
+		uv run --no-sync python -m parallax.jobs.crawl_listing --outlet cna --dry-run --wait-network 0 2>&1 \
+			| tee /tmp/dryrun.log; \
+		grep -Eq "cna +fetched=[1-9]" /tmp/dryrun.log || { echo "dry run fetched nothing for cna" >&2; exit 1; }'
 	@rm -rf $(OPS_CHECK)
 	@echo "ops.check OK"
 
