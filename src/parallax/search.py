@@ -31,3 +31,29 @@ def find_articles(conn: psycopg.Connection, keyword: str, limit: int = 200) -> l
     with conn.cursor() as cur:
         cur.execute(_SEARCH, {"q": segmented, "limit": limit})
         return cur.fetchall()
+
+
+# Everything the incident report needs from tier 1, for every match: no LIMIT,
+# metadata only. Downstream metrics join on these ids -- deliberately the shape
+# an Elasticsearch swap hands back, so the report code survives the change.
+_MATCH_ALL = """
+SELECT ai.id, ai.outlet, ai.title, ai.published_at, ai.seen_at, ai.effective_at
+FROM article_index ai, plainto_tsquery('simple', %(q)s) query
+WHERE to_tsvector('simple', ai.title_seg) @@ query
+ORDER BY ai.effective_at, ai.id
+"""
+
+
+def match_all(conn: psycopg.Connection, keyword: str) -> list[dict]:
+    """Every tier-1 article whose title matches the keyword, oldest first.
+
+    Same predicate and the same segmentation rule as find_articles; the two
+    must never drift, or the report would count articles the search cannot
+    show.
+    """
+    segmented = segment_text(keyword)
+    if not segmented:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(_MATCH_ALL, {"q": segmented})
+        return cur.fetchall()

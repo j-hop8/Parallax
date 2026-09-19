@@ -87,8 +87,9 @@ cluster with `origin_confident = false`), `original = (alone + first) / n`,
 `ClusterView`: members in `effective_at` order with `rank` **only when
 `origin_confident`**, `origin` = rank-1 member only then, else `origin=None`
 and `reason` rebuilt with `nlp.dedup.build_cluster`. Deltas and
-`delta_summary` pass through; `delta_removed` is asserted empty on an
-indeterminate cluster (T-009 wrote it so; the view must not undo it).
+`delta_summary` pass through; on an indeterminate cluster `delta_removed` is
+forced empty on the way out (T-009 writes it so; a stale row must not leak a
+direction into the UI).
 
 **Report (`metrics/report.py`).** `build_report(conn, keyword, since, until)
 -> IncidentReport`: header (`articles`, `outlets`, `clusters`, `span_days`,
@@ -138,8 +139,8 @@ writes.
 - `--since/--until` bucket by Taipei dates; a UTC-evening article lands on
   the next Taipei day.
 - An indeterminate cluster has `origin is None`, no member ranks, non-empty
-  `reason`, and every `delta_removed` empty; the readout prints 順序不明 and
-  never `#1`.
+  `reason`, and every `delta_removed` empty even when the stored row carries
+  one; the readout prints 順序不明 and never `#1` or `－`.
 - Stance counts for a keyword equal `stance_by_outlet` restricted to the
   matched ids; `classified <= enriched <= matched` per outlet.
 - Originality per outlet matches `make dedup`'s table for the same articles
@@ -149,6 +150,37 @@ writes.
   outlets with matches on those days and the numbers in the prototype above.
 - `make report KEYWORD=不存在的字` exits 0 with a one-line message.
 - `uv run pytest -q` passes offline; DB tests skip without a database.
+
+## Live (2026-09-19, 31,395 tier-1 rows, 478 bodies)
+
+`make report KEYWORD=沈伯洋`: 333 篇文章, 8 家媒體, 4 個抄襲群, 35 天 (16
+active). Every outlet reports `basis=exact` on **2/16 days**; weights 0.1%
+(ettoday: 1 match against 748 articles across the two complete days) to 1.0%
+(setn). cna 0.2% not the prototype's 0.3% because 08-20 -- a complete day on
+which cna ran nothing about 沈伯洋 -- now counts 0/325. 17 matched articles
+sit on a different Taipei day than they were polled: the overnight sleep gaps
+made visible, and all on incomplete days. Stance: `classified == enriched`
+for every outlet (44/44 ltn, 45/45 ftv). Originality matches `make dedup`'s
+table. Cluster 34939 (udn/udn) prints `順序不明: gap 0s inside the 300s noise
+floor` with no ranks.
+
+`--since 2026-08-20 --until 2026-08-21`: 43 篇文章, 1 個抄襲群, weights
+identical to the prototype's usable-day figures (ltn 0.8%, setn 1.0%, udn
+0.2%).
+
+`KEYWORD=關稅`: 6 clusters touched (the prototype counted 4 by first-member
+title; two more have a member whose headline carries the word). ettoday
+**0.0% exact** -- it matched nothing on either complete day, which is the
+measurement, not a gap. No stance rows at the configured model: the Q1
+columns are `—`.
+
+## Knowingly not done
+
+- No per-day series in the readout; `OutletCoverage.days` carries it for the
+  UI's timeline.
+- `too_short` still counts as alone (see above).
+- The baseline tier has never engaged on real data and cannot until seven
+  complete days exist for an outlet; it is covered by the pure tests only.
 
 ## Verify
 

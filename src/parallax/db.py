@@ -624,3 +624,131 @@ def save_summary(
             """,
             (summary, model, version, article_id),
         )
+
+
+# ---- T-010: incident report reads --------------------------------------------
+# All keyed by the matched article ids from search.match_all. Nothing here
+# knows the keyword; that keeps the FTS predicate in one place (search.py).
+
+
+def daily_totals(
+    conn: psycopg.Connection, outlets: Iterable[str], since, until
+) -> list[dict]:
+    """Rollup rows for these outlets between two Taipei dates, inclusive."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT outlet, day, total_articles, complete
+            FROM outlet_daily_totals
+            WHERE outlet = ANY(%s) AND day BETWEEN %s AND %s
+            """,
+            (list(outlets), since, until),
+        )
+        return cur.fetchall()
+
+
+def complete_day_totals(conn: psycopg.Connection) -> dict[str, list[int]]:
+    """Every complete day's total per outlet -- the raw material for a baseline."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT outlet, total_articles FROM outlet_daily_totals WHERE complete ORDER BY outlet"
+        )
+        out: dict[str, list[int]] = {}
+        for r in cur.fetchall():
+            out.setdefault(r["outlet"], []).append(r["total_articles"])
+        return out
+
+
+def rollup_as_of(conn: psycopg.Connection):
+    """When the denominator was last recomputed; None before the first rollup."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT max(computed_at) AS at FROM outlet_daily_totals")
+        row = cur.fetchone()
+        return row["at"] if row else None
+
+
+def stance_for_ids(
+    conn: psycopg.Connection, ids: Iterable[int], target: str, model: str, prompt_version: str
+) -> list[dict]:
+    """stance_by_outlet, restricted to the matched articles."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ai.outlet,
+                   count(*) FILTER (WHERE s.label = 'neg') AS neg,
+                   count(*) FILTER (WHERE s.label = 'neu') AS neu,
+                   count(*) FILTER (WHERE s.label = 'pos') AS pos,
+                   count(*) AS n
+            FROM article_stance s
+            JOIN article_index ai ON ai.id = s.article_id
+            WHERE s.article_id = ANY(%s)
+              AND s.target = %s AND s.model = %s AND s.prompt_version = %s
+            GROUP BY ai.outlet
+            ORDER BY ai.outlet
+            """,
+            (list(ids), target, model, prompt_version),
+        )
+        return cur.fetchall()
+
+
+def cluster_roles(conn: psycopg.Connection, ids: Iterable[int]) -> list[dict]:
+    """One row per matched article that has a body: its cluster membership and
+    whether that cluster's order may be claimed. Feeds originality and the
+    per-outlet `enriched` count."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT a.id, ai.outlet, a.dup_cluster_id, a.is_cluster_origin, c.origin_confident
+            FROM articles a
+            JOIN article_index ai ON ai.id = a.id
+            LEFT JOIN dup_clusters c ON c.cluster_id = a.dup_cluster_id
+            WHERE a.id = ANY(%s) AND a.body IS NOT NULL AND a.body <> ''
+            ORDER BY ai.outlet, a.id
+            """,
+            (list(ids),),
+        )
+        return cur.fetchall()
+
+
+def clusters_touching(conn: psycopg.Connection, ids: Iterable[int]) -> list[dict]:
+    """Every stored cluster with at least one matched member -- all its members,
+    matched or not, because the cluster is about the incident even when one
+    copy's headline dropped the keyword. Same shape as clusters_for_framing,
+    without bodies."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.cluster_id, c.origin_confident, c.shared_core_text,
+                   ai.id, ai.outlet, ai.title, ai.effective_at, ai.published_at,
+                   a.cluster_rank, a.delta_added, a.delta_removed, a.delta_summary
+            FROM dup_clusters c
+            JOIN articles a ON a.dup_cluster_id = c.cluster_id
+            JOIN article_index ai ON ai.id = a.id
+            WHERE c.cluster_id IN (
+                SELECT dup_cluster_id FROM articles
+                WHERE id = ANY(%s) AND dup_cluster_id IS NOT NULL
+            )
+            ORDER BY c.first_published_at, c.cluster_id, a.cluster_rank, ai.id
+            """,
+            (list(ids),),
+        )
+        rows = cur.fetchall()
+    clusters: dict[int, dict] = {}
+    for r in rows:
+        c = clusters.setdefault(
+            r["cluster_id"],
+            {
+                "cluster_id": r["cluster_id"],
+                "origin_confident": r["origin_confident"],
+                "shared_core_text": r["shared_core_text"],
+                "members": [],
+            },
+        )
+        c["members"].append(
+            {
+                k: v
+                for k, v in r.items()
+                if k not in ("cluster_id", "origin_confident", "shared_core_text")
+            }
+        )
+    return list(clusters.values())
