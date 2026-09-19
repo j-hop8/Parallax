@@ -3,6 +3,8 @@ Parallax 視差 — measures how Taiwanese outlets diverge covering the same inc
 
 ## Run
 
+CI runs Ruff lint and the full test suite (including Postgres and UI tests) on every pull request and push to `main`; a red check means lint or tests failed, or CI setup failed.
+
 ```bash
 make setup && make db.up && make db.migrate   # once
 make crawl && make rollup                      # tier 1 + the denominator

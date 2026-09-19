@@ -1,0 +1,58 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: parallax
+          POSTGRES_PASSWORD: parallax
+          POSTGRES_DB: parallax
+          LANG: C.UTF-8
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U parallax -d parallax"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --extra ui
+      - name: Compute dictionary cache key
+        id: dictionary
+        run: |
+          echo "key=$(awk '/https:.*dict.txt.big/ {print $1}' Makefile | sha256sum | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: config/dict.txt.big
+          key: dictionary-${{ steps.dictionary.outputs.key }}
+      - run: make dict
+      - name: Apply schema and migrations
+        env:
+          DATABASE_URL: postgresql://parallax:parallax@localhost:5433/parallax
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q < db/schema.sql
+          for f in $(ls db/migrations/*.sql 2>/dev/null | sort); do
+            echo "applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q < "$f" || exit 1
+          done
+      - run: uv run ruff check .
+      - name: Run tests and reject unavailable Postgres skips
+        run: |
+          uv run pytest -q -rs 2>&1 | tee pytest.log
+          ! grep -q "Postgres unavailable" pytest.log
