@@ -43,10 +43,12 @@ acceptance criteria here.
 **Split renderer from shell.** `ui/render.py` is pure: `IncidentReport` in,
 HTML strings out, no Streamlit import, tested offline with the same fake
 report `test_report_jobs.py` uses. `ui/app.py` is the Streamlit script:
-inputs → `build_report` → `st.markdown(html, unsafe_allow_html=True)`. HTML
-over native widgets because the design's stacked stance bar, weight bar and
-群組 cards have no Streamlit equivalent, and because one CSS block gives the
-cream page in `Design.pdf` instead of the default dashboard look.
+inputs → `build_report` → `st.html(...)`. HTML over native widgets because
+the design's stacked stance bar, weight bar and 群組 cards have no Streamlit
+equivalent, and because one CSS block gives the cream page in `Design.pdf`
+instead of the default dashboard look. `st.html` rather than
+`st.markdown(unsafe_allow_html=True)`: the markdown path would still parse
+`*`, `_` and `#` inside corpus text, and treats an indented line as code.
 
 **Page.** Wordmark row (`Parallax 視差` / 同一事件，不同角度，被測量).
 Sidebar: keyword text input, optional 起 / 迄 Taipei dates, and pills for the
@@ -70,7 +72,9 @@ design order:
   `#rank outlet HH:MM (+gap) summary`. Indeterminate: `順序不明 · reason`,
   no `#`, no `起源`, `＋` lines labelled 本版獨有, and never a `－` line.
   Members that did not match the keyword are marked 標題未含關鍵字.
-  Full deltas per member behind `st.expander`, default collapsed.
+  Full deltas per member behind a `<details>` inside the card (an
+  `st.expander` cannot sit inside an HTML card, and `<details>` keeps the
+  whole card in the pure renderer), default collapsed.
 - **Footer:** 分母更新於 …, day-shift count, stance model / prompt version
   -- the same three facts the text readout prints.
 - **Empty:** `找不到含「…」的標題` and nothing else. Errors from `build_report`
@@ -98,6 +102,9 @@ of the deliverable.
   skipped without streamlit, `build_report` monkeypatched -- no DB)
 - this ticket (archived to `done/` at ship)
 
+Not committed: `.claude/launch.json`, written so the desktop app's browser
+pane can start `make ui`; it is editor tooling, not part of the product.
+
 ## Do not touch
 
 `metrics/**` and `jobs/report.py` (the report is the contract; a rendering
@@ -119,7 +126,7 @@ need that requires a new field is a T-010 follow-up, not a quiet edit),
 - An indeterminate cluster's card contains 順序不明 and its reason, no `#`,
   no 起源, no `－`, and 本版獨有 for its `＋` lines -- with `delta_removed`
   non-empty on the input to prove the renderer, not just T-010, enforces it.
-- Q4 panel contains no digit.
+- Q4 panel contains no digit beyond its own section label.
 - `AppTest`: an empty keyword renders the prompt and calls nothing; a
   keyword renders the header counters; `build_report` raising surfaces as
   `st.error` with the message.
@@ -127,6 +134,43 @@ need that requires a new field is a T-010 follow-up, not a quiet edit),
   four cards, one of them 順序不明. `關稅` shows `—` stance and 尚未分類 on
   every row.
 - `uv run pytest -q` passes offline; `uv run ruff check .` clean.
+
+## Live (2026-09-19, 31,913 tier-1 rows, 478 bodies)
+
+`make ui`, 沈伯洋 via the pill: 348 篇文章 / 8 家媒體 / 4 個抄襲群 / 35
+天期間, 16 個活躍日. Every row `實測 · 2 / 16 天`; setn's 1.0% fills the bar
+and ettoday's 0.1% is a visible stub -- at the design's fixed 10% scale both
+would be hairlines. Stance captions read `44 / 77 已分類` (ltn), `9 / 19`
+(cna). 群組 C = cluster 34939 renders `順序不明 · gap 0s inside the 300s
+noise floor · 2 篇` with no `#`, no 起源, both members `與核心稿源相同。`.
+群組 A's tvbs member opens to `完整差異 19 行`; 群組 D's setn member shows
+its two `－` lines only when opened. Footer: `分母更新於 09-19 01:45 · 17
+篇文章的歸檔日與抓取日不同 · 立場模型 gemini-3.5-flash-lite v1`.
+
+`關稅`: 85 篇, 6 個抄襲群, every stance cell `尚未分類` on an empty dashed
+track, ettoday `0.0%` with an empty bar and `實測 · 2 / 12 天` -- the
+measurement, not a gap. `不存在的字`: one line, no table.
+
+Two things the browser showed that the tests did not: the `+1時00分` gap
+wrapped inside a 92px time column (widened to 128px, `nowrap`), and a
+single-select pill that stays lit toggles *off* on its next click, so after
+typing another keyword the pill silently did nothing. The callback now clears
+the pill after copying it.
+
+## Knowingly not done
+
+- No per-day timeline. `OutletCoverage.days` still carries the series; the
+  design page has no slot for it and the honest caveat (`2 / 16 天`) is on
+  every row already.
+- Cluster letters restart per report (群組 A..F); the stored `cluster_id` is
+  printed beside each for cross-reference with `make report` / `make dedup`.
+- The `ui` extra is not installed by `make setup`; `make ui` installs it on
+  first run (`uv run --extra ui`). streamlit's pandas/pyarrow tail took
+  several minutes on this connection.
+- `ruff format --check` flags six files this ticket did not touch
+  (`db.py`'s `daily_totals`, `resegment.py`, `rollup_daily.py`, `models.py`,
+  `urls.py`, `test_rollup.py`); `make lint` runs only `ruff check`, which is
+  clean. Left alone: a format-only diff belongs in its own commit.
 
 ## Verify
 
