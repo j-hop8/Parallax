@@ -289,3 +289,146 @@ def test_interrupted_import_rolls_back(tmp_path, monkeypatch):
     assert not conn.run["ok"] and conn.run["items_new"] == 0
     assert conn.run["error"] == "KeyboardInterrupt"
     assert conn.rollback.call_count >= 1
+
+
+class StatusConnection:
+    """Read-only query results; reject writes and advisory locks."""
+
+    def __init__(self, runs=()):
+        self.runs = list(runs)
+
+    def execute(self, sql):
+        assert sql.startswith("SELECT ")
+        assert "pg_advisory" not in sql
+        assert "platform='threads'" in sql
+        if "sum(queries)" in sql:
+            assert "started_at > now() - interval '24 hours'" in sql
+            return Mock(fetchone=lambda: {"used": 37, "ok_runs": 3, "failed_runs": 1})
+        if "FROM social_posts" in sql:
+            return Mock(fetchone=lambda: {"posts": 412, "keywords": 2})
+        assert "DISTINCT ON (keyword)" in sql
+        return Mock(fetchall=lambda: self.runs)
+
+
+@pytest.fixture
+def status_runs():
+    return [
+        {
+            "keyword": "沈伯洋",
+            "started_at": datetime(2026, 9, 19, 21, 59, tzinfo=UTC),
+            "ok": False,
+            "items_seen": 0,
+            "items_new": 0,
+            "error": "失" * 60 + "TRUNCATED",
+        },
+        {
+            "keyword": "萬安",
+            "started_at": datetime(2026, 9, 19, 14, 10, tzinfo=UTC),
+            "ok": True,
+            "items_seen": 200,
+            "items_new": 58,
+            "error": None,
+        },
+    ]
+
+
+def test_status_render(monkeypatch, status_runs):
+    monkeypatch.setattr(settings, "THREADS_DAILY_QUERY_BUDGET", 789)
+    report = social.status(StatusConnection(status_runs))
+    output = social.render_status(report)
+    assert output.splitlines()[0] == (
+        "threads  budget used 24h: 37 / 789   posts: 412 (2 keywords)   runs 24h: 3 ok, 1 failed"
+    )
+    failed, ok = output.splitlines()[2:4]
+    assert failed.split() == ["沈伯洋", "09-20", "05:59", "no", "0", "0", "失" * 60]
+    assert ok.split() == ["萬安", "09-19", "22:10", "yes", "200", "58"]
+    assert report["runs"][0]["error"].endswith("TRUNCATED")
+    assert "TRUNCATED" not in output
+    assert output.endswith("-- make threads.refresh")
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_status_cli_without_token(monkeypatch, capsys, status_runs, empty):
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(settings, "THREADS_ACCESS_TOKEN", None)
+    monkeypatch.setattr(
+        db, "connect", lambda: nullcontext(StatusConnection([] if empty else status_runs))
+    )
+    no_client = Mock(side_effect=AssertionError("must not construct ThreadsClient"))
+    no_http = Mock(side_effect=AssertionError("must not make HTTP requests"))
+    monkeypatch.setattr(social, "ThreadsClient", no_client)
+    monkeypatch.setattr("requests.Session.get", no_http)
+    assert social.main(["--status"]) == 0
+    captured = capsys.readouterr()
+    assert not captured.err
+    assert captured.out.startswith(
+        "threads  no runs recorded\n" if empty else "threads  budget used"
+    )
+    assert "-- approved for threads_keyword_search;" in captured.out
+    assert captured.out.endswith("-- make threads.refresh\n")
+    no_client.assert_not_called()
+    no_http.assert_not_called()
+
+
+def test_status_database_unreachable(monkeypatch, capsys):
+    monkeypatch.setattr(settings, "THREADS_ACCESS_TOKEN", None)
+    monkeypatch.setattr(db, "connect", Mock(side_effect=psycopg.OperationalError("DB unavailable")))
+    assert social.main(["--status"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == "DB unavailable\n"
+    assert not captured.out
+
+
+def test_status_db_aggregates_and_no_writes(conn, monkeypatch, capsys):
+    from contextlib import nullcontext
+
+    # Temporary copies isolate fixtures from any existing data, including other platforms.
+    conn.execute("CREATE TEMP TABLE social_runs (LIKE public.social_runs INCLUDING DEFAULTS)")
+    conn.execute("CREATE TEMP TABLE social_posts (LIKE public.social_posts INCLUDING DEFAULTS)")
+    monkeypatch.setattr(settings, "THREADS_ACCESS_TOKEN", None)
+    monkeypatch.setattr(db, "connect", lambda: nullcontext(conn))
+    assert social.main(["--status"]) == 0
+    assert capsys.readouterr().out.startswith("threads  no runs recorded\n")
+    for platform, keyword, hours, queries, ok in [
+        ("threads", "repeat", 25, 100, True),
+        ("threads", "repeat", 2, 7, True),
+        ("threads", "repeat", 1, 3, False),
+        ("threads", "old", 30, 200, False),
+        ("threads", "boundary", 24, 400, True),
+        ("facebook", "ignored", 0, 900, False),
+    ]:
+        conn.execute(
+            "INSERT INTO social_runs (platform, keyword, started_at, queries, ok, "
+            "items_seen, items_new, error) "
+            "VALUES (%s, %s, now() - %s * interval '1 hour', %s, %s, 10, 2, %s)",
+            (platform, keyword, hours, queries, ok, "E" * 80 if not ok else None),
+        )
+    for number, platform, keyword in [
+        (1, "threads", "repeat"),
+        (2, "threads", "repeat"),
+        (3, "threads", "old"),
+        (4, "facebook", "ignored"),
+    ]:
+        conn.execute(
+            "INSERT INTO social_posts (platform, post_url, fetched_for) VALUES (%s, %s, %s)",
+            (platform, f"https://example.com/status/{number}", keyword),
+        )
+    before = conn.execute("SELECT count(*) AS n FROM social_runs").fetchone()["n"]
+    report = social.status(conn)
+    assert {
+        key: report[key] for key in ("used", "ok_runs", "failed_runs", "posts", "keywords")
+    } == {
+        "used": 10,
+        "ok_runs": 1,
+        "failed_runs": 1,
+        "posts": 3,
+        "keywords": 2,
+    }
+    assert [run["keyword"] for run in report["runs"]] == ["repeat", "boundary", "old"]
+    assert report["runs"][0]["ok"] is False
+    assert report["runs"][0]["items_seen"] == 10
+    assert report["runs"][0]["items_new"] == 2
+    assert report["runs"][0]["error"] == "E" * 80
+    assert social.main(["--status"]) == 0
+    assert conn.execute("SELECT count(*) AS n FROM social_runs").fetchone()["n"] == before

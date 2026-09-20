@@ -123,6 +123,63 @@ def ingest(conn, keyword, since, until, *, limit=200, dry_run=False, client=None
         client.before_request = None
 
 
+def status(conn) -> dict:
+    """Read Threads budget, post totals, and the latest run for every keyword."""
+    report = dict(
+        conn.execute(
+            "SELECT coalesce(sum(queries),0) AS used, "
+            "count(*) FILTER (WHERE ok) AS ok_runs, "
+            "count(*) FILTER (WHERE NOT ok) AS failed_runs FROM social_runs "
+            "WHERE platform='threads' AND started_at > now() - interval '24 hours'"
+        ).fetchone()
+    )
+    report.update(
+        conn.execute(
+            "SELECT count(*) AS posts, count(DISTINCT fetched_for) AS keywords "
+            "FROM social_posts WHERE platform='threads'"
+        ).fetchone()
+    )
+    report["runs"] = conn.execute(
+        "SELECT * FROM ("
+        "SELECT DISTINCT ON (keyword) keyword, started_at, run_id, ok, "
+        "items_seen, items_new, error FROM social_runs WHERE platform='threads' "
+        "ORDER BY keyword, started_at DESC, run_id DESC"
+        ") AS latest ORDER BY started_at DESC, run_id DESC"
+    ).fetchall()
+    return report
+
+
+def render_status(report) -> str:
+    """Format a status snapshot, keeping full errors in the underlying report."""
+    if not report["runs"]:
+        lines = ["threads  no runs recorded"]
+    else:
+        lines = [
+            (
+                f"threads  budget used 24h: {report['used']} / {settings.THREADS_DAILY_QUERY_BUDGET}"
+                f"   posts: {report['posts']} ({report['keywords']} keywords)"
+                f"   runs 24h: {report['ok_runs']} ok, {report['failed_runs']} failed"
+            ),
+            "  keyword     last run (Taipei)   ok   seen  new   error",
+        ]
+        for run in report["runs"]:
+            started = run["started_at"].astimezone(ZoneInfo("Asia/Taipei")).strftime("%m-%d %H:%M")
+            ok = "yes" if run["ok"] else "no"
+            error = (run["error"] or "")[:60]
+            lines.append(
+                f"  {run['keyword']:<10}  {started}         {ok:<3}  "
+                f"{run['items_seen']:<4}  {run['items_new']:<4}  {error}".rstrip()
+            )
+    lines.extend(
+        [
+            "-- a run with error 'keyword_search returned only own posts …' means the app is not",
+            "-- approved for threads_keyword_search; a run of 401s past ~60 days means the token is dead:",
+            "-- make threads.refresh",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Keyword-driven Threads ingestion (tier 2)")
     parser.add_argument("--keyword")
@@ -134,8 +191,18 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--dry-run", action="store_true", help="budget check; no API/post writes")
     parser.add_argument("--refresh-token", action="store_true")
+    parser.add_argument("--status", action="store_true", help="read-only Threads health; no token needed")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
+    if args.status:
+        try:
+            with db.connect() as conn:
+                report = status(conn)
+        except Exception as exc:  # noqa: BLE001 -- DB errors contain no Threads token
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(render_status(report))
+        return 0
     if not settings.THREADS_ACCESS_TOKEN:
         print("THREADS_ACCESS_TOKEN is unset", file=sys.stderr)
         return 2
