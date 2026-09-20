@@ -28,6 +28,7 @@ panel so the design does not move if a compliant path opens later.
 - `.agents/tickets/T-015-threads-ingestion.md`, `T-016-q4-platform-lean.md`
   — the work this decision unblocks, written here so they are ready to
   delegate after the VPS cutover
+- this ticket
 
 ## Do not touch
 
