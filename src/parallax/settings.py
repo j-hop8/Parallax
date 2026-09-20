@@ -76,3 +76,8 @@ FRAMING_MODEL = os.environ.get("FRAMING_MODEL", STANCE_MODEL)
 # median over two days is not a baseline. The proposal says roughly ten days;
 # seven complete days is the floor before the estimate is shown at all.
 MIN_BASELINE_DAYS = int(os.environ.get("MIN_BASELINE_DAYS", "7"))
+
+# Tier-2 Threads ingestion; never needed by the standing listing crawl.
+THREADS_ACCESS_TOKEN = os.environ.get("THREADS_ACCESS_TOKEN")
+THREADS_DAILY_QUERY_BUDGET = int(os.environ.get("THREADS_DAILY_QUERY_BUDGET", "1000"))
+THREADS_API_BASE = os.environ.get("THREADS_API_BASE", "https://graph.threads.net/v1.0")

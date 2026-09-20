@@ -1,0 +1,1 @@
+{"data":[{"id":"1","text":"沈伯洋 測試","username":"public_author","permalink":"https://www.threads.net/@public_author/post/test1","timestamp":"2026-09-19T00:30:00+0000","media_type":"TEXT_POST","is_quote_post":false,"has_replies":false}],"paging":{"cursors":{"after":"cursor2"},"next":"https://graph.threads.net/keyword_search?access_token=secret-token&after=cursor2"}}
