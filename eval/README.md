@@ -144,3 +144,62 @@ make dedup                     # clusters must exist; this also fingerprints
 make label.pairs ARGS="--n 100 --annotator <you> --seed 1"
 make dedup.eval                # P/R at the defaults + a threshold sweep
 ```
+
+---
+
+# Post stance gold set — annotation guide (T-017)
+
+`post_stance_gold.csv` holds human stance labels for Threads posts. T-016
+keeps the Q4 panel's **model-labeled, unvalidated** caveat until this file has
+**≥ 100 human rows**. The file is created by labeling; a missing file means
+no labels yet.
+
+The `annotator` column records who labeled each row. Use your own name for
+human labels and identify any model annotator explicitly. Agreement with
+model labels is not human validation and does not count toward that threshold.
+
+## The task
+
+Judge **stance toward the TARGET**, not mood and not your agreement with the
+post. Use the author's own words only.
+
+| Label | Meaning |
+|---|---|
+| `neg` | Casts the target unfavorably: criticism, blame, ridicule, or attack framing. |
+| `neu` | Reports or mentions the target without a clear favorable or unfavorable stance; balanced or factual wording. |
+| `pos` | Casts the target favorably: praise, support, achievement framing, or endorsement. |
+
+On Threads:
+
+- Sarcasm is common: label the *intended* stance and add `sarcasm` in `note`.
+- A bare reaction depending on an unseen quote-post or reply → `s` skip.
+  If you press `o` and use the link to decide, label and add `context` in
+  `note`: the model will only ever see `text`.
+- Hashtag-only or emoji-only text → `s` skip.
+- A post about the target only in passing → `s`, unless the mention itself
+  is pointed.
+
+## Keys
+
+`n` = neg, `e` = neu, `p` = pos, `s` = skip, `o` = print the permalink,
+`q` = quit. Every label is saved immediately. Add notes in the CSV's `note`
+column after the session, preserving the other columns.
+
+## Workflow
+
+```bash
+make social KEYWORD=沈伯洋
+make label.posts KEYWORD=沈伯洋 ARGS="--n 30 --annotator <you> --seed 1"
+```
+
+Posts are shuffled across authors, media-only posts are dropped, and previously
+labeled permalink/target pairs are skipped on subsequent runs. The display
+shows author, Taipei time and full text, never the model's verdict.
+
+## CSV columns
+
+`post_id, platform, post_url, author, target, label, annotator, labeled_at, note`
+
+One row per `(post_url, target)`. The same permalink can have different labels
+for different targets. `post_id` is only a convenience: database migration or
+re-fetching can change it, so resume identity uses the permalink.
