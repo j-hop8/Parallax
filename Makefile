@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report ui
+.PHONY: social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report ui
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -13,6 +13,8 @@ help:
 	@echo "crawl      run the tier-1 listing crawl once"
 	@echo "crawl.one  run one outlet, e.g. make crawl.one OUTLET=cna"
 	@echo "health     per-outlet crawl health for the last 24h"
+	@echo "social     fetch Threads posts for a keyword, e.g. make social KEYWORD=沈伯洋"
+	@echo "threads.refresh  print a refreshed Threads token and expiry"
 	@echo "enrich     tier-2 body fetch for a keyword, e.g. make enrich KEYWORD=沈伯洋"
 	@echo "reextract  re-run body extraction over the raw HTML cache (no fetch) after a parser fix"
 	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"
@@ -93,6 +95,12 @@ rollup:
 # ---- tier 2 + Q1 ---------------------------------------------------------
 # All keyword-scoped: nothing here runs over the whole index. `stance` and
 # `stance.eval --classify` spend API quota; everything else is local.
+social:
+	uv run python -m parallax.jobs.social --keyword "$(KEYWORD)" $(ARGS)
+
+threads.refresh:
+	uv run python -m parallax.jobs.social --refresh-token
+
 enrich:
 	uv run python -m parallax.jobs.enrich --keyword "$(KEYWORD)" $(ARGS)
 

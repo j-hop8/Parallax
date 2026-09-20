@@ -6,6 +6,14 @@ laptop's checkout while it is production; (2) a Meta app approved for
 `threads_basic` + `threads_keyword_search`, with a long-lived user token in
 `.env` as `THREADS_ACCESS_TOKEN`. Both are the human's tasks.
 
+**Blocker status (2026-09-20, delegated):** (2) `THREADS_ACCESS_TOKEN` is now
+in the laptop's `.env`; whether the app is *approved* is unknown, which is
+exactly what the own-posts guard below exists for. (1) is still open -- the
+crawl still runs from this checkout -- but this ticket touches nothing on the
+tier-1 path and adds no dependency, so implementing it in `.worktrees/T-015`
+and reviewing the PR is unblocked; whether to merge before the cutover is the
+human's call at `/ship`.
+
 ## Why
 
 Q4 (platform lean) is the last unanswered question. Decision T-014: Threads
@@ -93,6 +101,24 @@ one-line message when unset), `THREADS_DAILY_QUERY_BUDGET=1000`,
 `text_seg` with the segmented query (invariant 6) **OR** `fetched_for = keyword`,
 so a post Threads matched but jieba split differently is still found.
 
+## Implementation notes for Codex
+
+- HTTP: use `requests`, as `crawl/http.py` does. **No new dependencies** --
+  the sandbox has no network, so `uv sync` cannot fetch anything. The
+  worktree's `.venv` is pre-built and editable-installed against this
+  worktree's `src/`; do not delete or recreate it.
+- No `.env` exists in the worktree, so `THREADS_ACCESS_TOKEN` is unset here:
+  the exit-2 path is what you will see if you run the job by hand. Tests use
+  fixtures only (mock `requests.Session.get` or inject a fake session).
+- DB-backed tests: follow the transaction-and-rollback fixture in
+  `tests/test_report_db.py` (skips with "Postgres unavailable"). In the
+  sandbox they will probably skip; CI runs them against a real Postgres and
+  fails the build on that skip, so write them as if they run.
+- `text_seg`: `parallax.nlp.segment.segment_text` is read-only for you; import
+  it, do not copy it.
+- If the sandbox refuses a write under `.agents/` (it did in T-012), leave the
+  ticket where it is and say so in your final message.
+
 ## Files in scope
 
 - `src/parallax/social/__init__.py`, `src/parallax/social/threads.py` (new)
@@ -137,6 +163,7 @@ so a post Threads matched but jieba split differently is still found.
 - `--refresh-token` prints a token and expiry from a fixture response and
   leaves `.env` untouched.
 - Full suite green, ruff clean, CI green.
+- Ticket file moved to `.agents/tickets/done/`.
 
 ## Knowingly out of scope (T-016)
 

@@ -773,3 +773,40 @@ def clusters_touching(conn: psycopg.Connection, ids: Iterable[int]) -> list[dict
             }
         )
     return list(clusters.values())
+
+
+def upsert_social_posts(conn, posts, keyword):
+    """First content wins; repeated permalinks update only the observation time."""
+    from .nlp.segment import segment_text
+
+    inserted = 0
+    for post in posts:
+        row = conn.execute(
+            """
+            INSERT INTO social_posts
+                (platform, post_url, author, posted_at, text, text_seg, fetched_for, raw_path)
+            VALUES ('threads', %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (post_url) DO UPDATE SET seen_at = clock_timestamp()
+            RETURNING (xmax = 0) AS inserted
+            """,
+            (post["permalink"], post["username"], post["timestamp"], post.get("text", ""),
+             segment_text(post.get("text", "")), keyword, post["raw_path"]),
+        ).fetchone()
+        inserted += int(row["inserted"])
+    return inserted
+
+
+def find_social_posts(conn, keyword, platform, since, until):
+    """Find segmented text matches or the original API discovery keyword."""
+    from .nlp.segment import segment_text
+
+    return conn.execute(
+        """
+        SELECT * FROM social_posts
+        WHERE platform = %s AND posted_at >= %s AND posted_at < %s
+          AND (to_tsvector('simple', text_seg) @@ plainto_tsquery('simple', %s)
+               OR fetched_for = %s)
+        ORDER BY posted_at DESC, id
+        """,
+        (platform, since, until, segment_text(keyword), keyword),
+    ).fetchall()
