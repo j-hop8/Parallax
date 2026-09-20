@@ -13,6 +13,8 @@ help:
 	@echo "crawl      run the tier-1 listing crawl once"
 	@echo "crawl.one  run one outlet, e.g. make crawl.one OUTLET=cna"
 	@echo "health     per-outlet crawl health for the last 24h"
+	@echo "social     fetch Threads posts for a keyword, e.g. make social KEYWORD=沈伯洋"
+	@echo "threads.refresh  print a refreshed Threads token and expiry"
 	@echo "enrich     tier-2 body fetch for a keyword, e.g. make enrich KEYWORD=沈伯洋"
 	@echo "reextract  re-run body extraction over the raw HTML cache (no fetch) after a parser fix"
 	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"

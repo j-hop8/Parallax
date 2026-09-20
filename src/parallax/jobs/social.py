@@ -4,7 +4,7 @@ import argparse
 import logging
 import math
 import sys
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from itertools import islice
 from zoneinfo import ZoneInfo
 
@@ -19,15 +19,17 @@ _BUDGET_LOCK = 150015
 
 
 def taipei_window(since=None, until=None):
-    today = datetime.now(ZoneInfo(settings.TIMEZONE)).date()
+    now = datetime.now(ZoneInfo(settings.TIMEZONE))
+    today = now.date()
     start = date.fromisoformat(since) if since else today - timedelta(days=7)
-    end = date.fromisoformat(until) if until else today
+    end = date.fromisoformat(until) if until else today + timedelta(days=1)
     epochs = tuple(
         int(datetime.combine(d, time(), ZoneInfo(settings.TIMEZONE)).timestamp())
         for d in (start, end)
     )
-    if not 1688540400 <= epochs[0] < epochs[1] <= datetime.now(UTC).timestamp():
-        raise ValueError("Window must be increasing, since >= 2023-07-06, until <= now")
+    epochs = (epochs[0], min(epochs[1], int(now.timestamp()) // 60 * 60))
+    if not 1688540400 <= epochs[0] < epochs[1]:
+        raise ValueError("Window must be increasing after clamping until to now, since >= 2023-07-06")
     return epochs
 
 
@@ -69,7 +71,9 @@ def ingest(conn, keyword, since, until, *, limit=200, dry_run=False, client=None
                     f"Threads daily query budget exceeded: {used} + {estimate} > "
                     f"{settings.THREADS_DAILY_QUERY_BUDGET}"
                 )
-            if not dry_run:
+            if dry_run:
+                stats["error"] = "dry run"
+            else:
                 owner = client.me()["username"]
                 if not owner:
                     raise ThreadsError("Threads /me returned no username")
@@ -123,7 +127,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Keyword-driven Threads ingestion (tier 2)")
     parser.add_argument("--keyword")
     parser.add_argument("--since", help="inclusive Taipei date (default: seven days ago)")
-    parser.add_argument("--until", help="exclusive Taipei date (default: today)")
+    parser.add_argument(
+        "--until",
+        help="exclusive Taipei date (default: tomorrow); capped at now, floored to the minute",
+    )
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--dry-run", action="store_true", help="budget check; no API/post writes")
     parser.add_argument("--refresh-token", action="store_true")

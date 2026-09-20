@@ -28,7 +28,7 @@ def client(tmp_path, responses):
 
 
 def test_pages_cache_and_redaction(tmp_path):
-    c = client(tmp_path, [response("page1.json"), response("page2.json")])
+    c = client(tmp_path, [response("page1.json"), response("page2.json")] * 2)
     assert len(list(c.keyword_search("沈伯洋", SINCE, UNTIL))) == 2
     assert c.queries == 2
     assert c.session.get.call_args.kwargs["params"]["after"] == "cursor2"
@@ -39,7 +39,8 @@ def test_pages_cache_and_redaction(tmp_path):
         with gzip.open(path, "rt") as stream:
             assert "secret-token" not in stream.read()
     assert len(list(c.keyword_search("沈伯洋", SINCE, UNTIL))) == 2
-    assert c.queries == 2
+    assert c.queries == 4
+    assert c.session.get.call_count == 4
 
 
 @pytest.mark.parametrize("status", [429, 500, 503])

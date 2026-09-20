@@ -42,17 +42,13 @@ class ThreadsClient:
             .replace(urlencode({"": self.token})[1:], "[REDACTED]")
         )
 
-    def _get(self, endpoint, params, *, cache=False, refresh=False):
+    def _get(self, endpoint, params, *, refresh=False):
         url = f"{settings.THREADS_API_BASE.rstrip('/')}/{endpoint}"
         digest = hashlib.sha1(f"{url}?{urlencode(sorted(params.items()))}".encode()).hexdigest()
         day = datetime.now(ZoneInfo(settings.TIMEZONE)).date().isoformat()
         path = self.raw_dir / "threads" / day / f"{digest}.json.gz"
         self.raw_path = str(path)
-        if cache and path.exists():
-            with gzip.open(path, "rt") as stream:
-                saved = json.load(stream)
-            if "data" in saved and "error" not in saved:
-                return saved
+        # Search results change throughout the day; raw responses are write-only.
         for attempt in range(3):
             if self.before_request:
                 self.before_request()
@@ -116,7 +112,7 @@ class ThreadsClient:
         }
         cursors = set()
         while True:
-            data = self._get("keyword_search", params, cache=True)
+            data = self._get("keyword_search", params)
             yield from data["data"]
             after = data.get("paging", {}).get("cursors", {}).get("after")
             if not data["data"] or not after:

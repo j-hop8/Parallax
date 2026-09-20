@@ -20,10 +20,26 @@ def test_missing_token_no_db(monkeypatch, capsys):
     connect.assert_not_called()
 
 
-def test_taipei_dates():
+def test_taipei_dates(monkeypatch):
+    now = datetime(2026, 9, 20, 5, 27, 43, tzinfo=UTC)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz)
+
+    monkeypatch.setattr(social, "datetime", FixedDatetime)
     since, until = social.taipei_window("2026-09-19", "2026-09-20")
     assert datetime.fromtimestamp(since, UTC).isoformat() == "2026-09-18T16:00:00+00:00"
     assert datetime.fromtimestamp(until, UTC).isoformat() == "2026-09-19T16:00:00+00:00"
+
+    since, until = social.taipei_window("2026-09-19", "2026-09-22")
+    assert until == int(now.timestamp()) // 60 * 60
+    default_since, default_until = social.taipei_window()
+    assert default_until == until
+    assert datetime.fromtimestamp(default_since, UTC).isoformat() == "2026-09-12T16:00:00+00:00"
+    with pytest.raises(ValueError, match="increasing"):
+        social.taipei_window("2026-09-21", "2026-09-22")
 
 
 def test_refresh_cli(tmp_path, monkeypatch, capsys):
@@ -109,8 +125,12 @@ def test_retry_cannot_exceed_budget(tmp_path, monkeypatch):
 
 def test_dry_run_no_api(tmp_path):
     c = client(tmp_path, [])
-    result = social.ingest(MemoryConnection(), "x", SINCE, UNTIL, dry_run=True, client=c)
+    conn = MemoryConnection()
+    result = social.ingest(conn, "x", SINCE, UNTIL, dry_run=True, client=c)
     assert result["ok"] and result["queries"] == result["items_new"] == 0
+    assert result["items_seen"] == 0 and result["error"] == "dry run"
+    assert conn.run == result
+    c.session.get.assert_not_called()
 
 
 @pytest.fixture
@@ -181,12 +201,20 @@ def test_schema_mirror(conn):
                 (name + r"\.", name),
             ).fetchall()
         )
+        snapshots[-1] = (
+            snapshots[-1],
+            conn.execute(
+                "SELECT tablename, indexname, "
+                "regexp_replace(indexdef, %s, '', 'g') AS indexdef "
+                "FROM pg_indexes WHERE schemaname=%s ORDER BY tablename, indexname",
+                (name + r"\.", name),
+            ).fetchall(),
+        )
     assert snapshots[0] == snapshots[1]
 
 
 def test_job_db_records_and_rollback(conn, tmp_path, monkeypatch):
     # Preserve an outer transaction even when the job commits per-request audit charges.
-    conn.execute("DELETE FROM social_runs")
     conn.execute("SAVEPOINT job_commit")
 
     class TransactionProxy:
@@ -199,7 +227,8 @@ def test_job_db_records_and_rollback(conn, tmp_path, monkeypatch):
         def rollback(self):
             conn.execute("ROLLBACK TO SAVEPOINT job_commit")
 
-    monkeypatch.setattr(settings, "THREADS_DAILY_QUERY_BUDGET", 1000)
+    used = conn.execute("SELECT coalesce(sum(queries), 0) AS used FROM social_runs").fetchone()["used"]
+    monkeypatch.setattr(settings, "THREADS_DAILY_QUERY_BUDGET", used + 1000)
     c = client(tmp_path, [response("me.json"), response("own.json")])
     result = social.ingest(TransactionProxy(), "zzsocialjob", SINCE, UNTIL, client=c)
     row = conn.execute("SELECT * FROM social_runs WHERE keyword='zzsocialjob'").fetchone()
@@ -207,15 +236,18 @@ def test_job_db_records_and_rollback(conn, tmp_path, monkeypatch):
     for key in result:
         assert row[key] == result[key]
 
-    # An approved response commits posts and audit counters together; replay only calls /me.
+    # An approved response commits posts and audit counters together.
+    # A repeat run fetches every page again.
     c = client(
         tmp_path / "approved", [response("me.json"), response("page1.json"), response("page2.json")]
     )
     first = social.ingest(TransactionProxy(), "zzsocialapproved", SINCE, UNTIL, client=c)
     assert first["ok"] and first["items_new"] == 2 and first["queries"] == 3
-    c = client(tmp_path / "approved", [response("me.json")])
+    c = client(
+        tmp_path / "approved", [response("me.json"), response("page1.json"), response("page2.json")]
+    )
     second = social.ingest(TransactionProxy(), "zzsocialapproved", SINCE, UNTIL, client=c)
-    assert second["ok"] and second["items_new"] == 0 and second["queries"] == 1
+    assert second["ok"] and second["items_new"] == 0 and second["queries"] == 3
     rows = conn.execute(
         "SELECT * FROM social_posts WHERE fetched_for='zzsocialapproved'"
     ).fetchall()
