@@ -20,6 +20,8 @@ never re-hits the API.
 ## API facts (developers.facebook.com/docs/threads/keyword-search, checked 2026-09-20)
 
 - `GET https://graph.threads.net/v1.0/keyword_search?q=<kw>&search_type=RECENT&since=<unix>&until=<unix>&fields=...&limit=100&access_token=...`
+  (Meta's docs use both `graph.threads.net` and `graph.threads.com`; both
+  are live. Default to `.net`, keep it in `THREADS_API_BASE`.)
 - Budget: **2,200 queries per rolling 24 h per user.** Page size ≤ 100
   (default 25). `since` ≥ 1688540400, `until` ≤ now. Cursor pagination
   (`paging.cursors.after`).
@@ -74,6 +76,14 @@ verdict-comparability rule from `nlp/stance.py` holds from the first row.
 Mirror the new columns in `db/schema.sql` so a fresh `make db.migrate` and an
 upgraded DB end identical.
 
+**Token lifecycle.** The long-lived token lives **60 days** and there is no
+refresh token: `GET /refresh_access_token?grant_type=th_refresh_token&access_token=…`
+returns a new 60-day token (allowed once the current one is ≥ 24 h old; an
+expired token is dead for good and the human redoes the dashboard flow).
+`jobs/social.py --refresh-token` calls it and **prints** the new token +
+`expires_in`; it never writes `.env`. Makefile `threads.refresh`. `ops/env.example`
+says: refresh monthly.
+
 **Settings:** `THREADS_ACCESS_TOKEN` (env, no default; job exits 2 with a
 one-line message when unset), `THREADS_DAILY_QUERY_BUDGET=1000`,
 `THREADS_API_BASE="https://graph.threads.net/v1.0"`. Add the token line to
@@ -124,6 +134,8 @@ so a post Threads matched but jieba split differently is still found.
   segmented keyword but whose `fetched_for` does.
 - Schema mirror: `make db.migrate` on a fresh DB and on a DB carrying 001–002
   produce identical `\d social_posts` / `\d social_runs`.
+- `--refresh-token` prints a token and expiry from a fixture response and
+  leaves `.env` untouched.
 - Full suite green, ruff clean, CI green.
 
 ## Knowingly out of scope (T-016)
