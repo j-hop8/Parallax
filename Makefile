@@ -115,6 +115,9 @@ stance:
 label:
 	uv run python scripts/label_stance.py --keyword "$(KEYWORD)" $(ARGS)
 
+label.posts:
+	uv run python scripts/label_posts.py --keyword "$(KEYWORD)" $(ARGS)
+
 stance.eval:
 	uv run python -m parallax.jobs.eval_stance $(ARGS)
 

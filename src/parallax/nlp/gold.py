@@ -305,3 +305,152 @@ def pair_label_session(
 def _pair_summary(counts: dict[str, int]) -> str:
     labeled = counts["dup"] + counts["not"]
     return f"labeled {labeled}: dup {counts['dup']} / not {counts['not']}  (skipped {counts['skipped']})"
+
+
+# ---- post gold set (T-017): eval/post_stance_gold.csv ------------------------
+
+POST_GOLD_PATH = EVAL_DIR / "post_stance_gold.csv"
+POST_COLUMNS = (
+    "post_id",
+    "platform",
+    "post_url",
+    "author",
+    "target",
+    "label",
+    "annotator",
+    "labeled_at",
+    "note",
+)
+
+
+@dataclass(frozen=True)
+class PostGoldRow:
+    post_id: int
+    platform: str
+    post_url: str
+    author: str
+    target: str
+    label: str
+    annotator: str
+    labeled_at: str
+    note: str = ""
+
+
+def load_post_gold(path: Path = POST_GOLD_PATH) -> list[PostGoldRow]:
+    """Read human post labels; a missing file is an empty set."""
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as fh:
+        rows = []
+        for r in csv.DictReader(fh):
+            if r["label"] not in LABELS:
+                raise ValueError(f"{path.name}: bad label {r['label']!r} for post {r['post_id']}")
+            rows.append(
+                PostGoldRow(
+                    post_id=int(r["post_id"]),
+                    platform=r["platform"],
+                    post_url=r["post_url"],
+                    author=r["author"],
+                    target=r["target"],
+                    label=r["label"],
+                    annotator=r.get("annotator", ""),
+                    labeled_at=r.get("labeled_at", ""),
+                    note=r.get("note", "") or "",
+                )
+            )
+        return rows
+
+
+def append_post_gold(path: Path, row: PostGoldRow) -> None:
+    """Persist one valid label immediately, with a header only on an empty file."""
+    if row.label not in LABELS:
+        raise ValueError(f"{path.name}: bad label {row.label!r} for post {row.post_id}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=POST_COLUMNS)
+        if new:
+            writer.writeheader()
+        writer.writerow(row.__dict__)
+        fh.flush()
+
+
+def pending_posts(
+    posts: Iterable[dict], gold: Iterable[PostGoldRow], target: str, seed: int | None = None
+) -> list[dict]:
+    """Drop media-only and labeled posts, then shuffle across authors.
+
+    Permalinks survive database migrations; numeric post ids do not.
+    """
+    done = {(g.post_url, g.target) for g in gold}
+    todo = [
+        p for p in posts if (p.get("text") or "").strip() and (p["post_url"], target) not in done
+    ]
+    random.Random(seed).shuffle(todo)
+    return todo
+
+
+def post_label_session(
+    posts: list[dict],
+    *,
+    target: str,
+    annotator: str,
+    gold_path: Path = POST_GOLD_PATH,
+    limit: int = 50,
+    read: Callable[[str], str] = input,
+    write: Callable[[str], None] = print,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> dict[str, int]:
+    """Blind post labeling with immediate persistence and optional permalink display."""
+    from zoneinfo import ZoneInfo
+
+    from .. import settings
+
+    counts = {"neg": 0, "neu": 0, "pos": 0, "skipped": 0}
+    queue = posts[:limit]
+    write(
+        f"{len(queue)} to label for {target!r} (annotator: {annotator}). "
+        "Keys: n/e/p, s skip, o permalink, q quit."
+    )
+    for i, post in enumerate(queue, 1):
+        posted_at = post.get("posted_at")
+        time = (
+            posted_at.astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%Y-%m-%d %H:%M")
+            if posted_at is not None
+            else "(no time)"
+        )
+        write("")
+        write(f"[{i}/{len(queue)}] @{post['author']} · {time}")
+        write(post["text"])
+        while True:
+            key = read("  n/e/p/s/o/q > ").strip().lower()
+            if key == "o":
+                write(post["post_url"])
+                continue
+            if key in KEYS:
+                label = KEYS[key]
+                append_post_gold(
+                    gold_path,
+                    PostGoldRow(
+                        post_id=post["id"],
+                        platform=post["platform"],
+                        post_url=post["post_url"],
+                        author=post["author"],
+                        target=target,
+                        label=label,
+                        annotator=annotator,
+                        labeled_at=now().isoformat(timespec="seconds"),
+                    ),
+                )
+                counts[label] += 1
+                break
+            if key == "s":
+                counts["skipped"] += 1
+                break
+            if key == "q":
+                write(_summary(counts))
+                return counts
+            write("  ? n=neg e=neu p=pos s=skip o=permalink q=quit")
+        write(f"  {_summary(counts)}")
+    write(_summary(counts))
+    return counts
