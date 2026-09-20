@@ -161,6 +161,7 @@ health:
 	@echo "-- largest_gap is the number that matters: the crawl runs every 20 min, so"
 	@echo "-- anything past ~1h is coverage this project can never get back."
 	@$(PSQL) -tc "SELECT count(*) FILTER (WHERE NOT ok) || ' failed runs in 24h' FROM crawl_runs WHERE started_at > now() - interval '24 hours';"
+	@uv run python -m parallax.jobs.social --status
 
 # One entry point per host kind. macOS: launchd (re-runs a job missed during
 # sleep). Linux: systemd timers with Persistent=true, the same property. The
