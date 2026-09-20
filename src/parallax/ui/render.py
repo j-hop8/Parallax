@@ -263,11 +263,14 @@ def table(r: IncidentReport) -> str:
 
 
 def q4() -> str:
+    # Threads is the phase-2 platform (official keyword-search API). Facebook
+    # stays as a slot so the design holds if a compliant read path ever opens;
+    # today there is none, and the caption says so rather than promising a date.
     boxes = "".join(
         f'<div class="box"><div class="t">{name}</div>'
         '<div class="px-stance empty"></div>'
-        '<div class="px-caption"><span>尚未接入</span><span>第二階段</span></div></div>'
-        for name in ("PTT", "Dcard")
+        f'<div class="px-caption"><span>尚未接入</span><span>{when}</span></div></div>'
+        for name, when in (("Threads", "第二階段"), ("Facebook", "暫緩：無合規資料管道"))
     )
     return (
         '<div class="px-section px-q4"><h2>Q4 · 社群平台傾向</h2>'
