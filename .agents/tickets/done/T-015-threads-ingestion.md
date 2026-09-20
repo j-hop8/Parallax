@@ -1,6 +1,8 @@
 # T-015 — Threads ingestion: keyword-driven fetch of public posts into `social_posts`
 
-**Owner:** codex (delegable — self-contained, external API with fixtures).
+**Owner:** codex — shipped as #16 (`8fdf56e`, 2026-09-20) after one review
+round. Archived from `claude/T-015-archive`: Codex's sandbox refuses writes
+under `.agents/`, so the move could not ride the codex branch.
 **Blocked by:** (1) the VPS cutover (T-013 §5–§9) — nothing new ships to this
 laptop's checkout while it is production; (2) a Meta app approved for
 `threads_basic` + `threads_keyword_search`, with a long-lived user token in
@@ -164,6 +166,18 @@ so a post Threads matched but jieba split differently is still found.
   leaves `.env` untouched.
 - Full suite green, ruff clean, CI green.
 - Ticket file moved to `.agents/tickets/done/`.
+
+## Live (2026-09-20, at merge)
+
+- Fixture-only so far: no live call has been made. Migration 003 is **not yet
+  applied** to the laptop DB — `make db.migrate` before the first `make social`.
+- To record after the first real run: whether `me()` and
+  `refresh_access_token` under `/v1.0/` accept the `Authorization: Bearer`
+  header (the client sends no `access_token` query param), and whether the
+  own-posts guard fires (= app not yet approved for `threads_keyword_search`).
+- Review round 1 caught two behaviours the tests had passed: the default window
+  excluded the current day, and search pages were replayed from the same-day
+  raw cache. Both fixed in `b67815b`; the raw cache is now write-only.
 
 ## Knowingly out of scope (T-016)
 
