@@ -176,7 +176,8 @@ CREATE INDEX IF NOT EXISTS crawl_runs_outlet_time_idx
     ON crawl_runs (outlet, started_at DESC);
 
 
--- Phase 2 (PTT, Dcard). Created empty now so the schema is stable.
+-- Phase 2 (Threads first; Facebook parked -- proposal §5). Created empty now
+-- so the schema is stable. `board` is a PTT-era column; Threads leaves it NULL.
 CREATE TABLE IF NOT EXISTS social_posts (
     id           BIGSERIAL PRIMARY KEY,
     platform     TEXT NOT NULL,

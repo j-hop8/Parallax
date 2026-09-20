@@ -89,7 +89,7 @@ Deferred: social media, aspect taxonomy, Google Trends, Kafka, Airflow, LangChai
 
 ### Phase 2 — Analytical depth (weeks 5–8)
 
-- PTT and Dcard ingestion, enabling question 4
+- Threads ingestion via the official keyword-search API, enabling question 4 for one platform. Decision 2026-09-20: PTT and Dcard were dropped — both are losing users while Taiwanese political discussion has moved to Threads — and Facebook is **parked**: there is no read path that respects this project's crawling conduct (CrowdTangle closed Aug 2024, Meta Content Library is application-gated to institutional researchers, Page Public Content Access needs business verification). The Q4 panel keeps a Facebook slot so the design does not change if a compliant path opens.
 - Aspect taxonomy: BERTopic for discovery, hand-curated to 5–8 labels, LLM for consistent labeling
 - LangChain for the labeling layer — response caching, Pydantic-validated structured output, async batching
 - Elasticsearch replaces Postgres full-text as the query layer
@@ -201,7 +201,7 @@ Hand-labeling is unavoidable and should be budgeted as real work — roughly two
 | 2 | Sentiment approach validated on hand-labeled sample |
 | 3 | SimHash clustering + diff working; originality rate computable |
 | 4 | Streamlit UI answering questions 1–3; counts switch to true percentages — **MVP complete** |
-| 6 | PTT and Dcard ingested; question 4 answered |
+| 6 | Threads ingested; question 4 answered for one platform (Facebook parked) |
 | 8 | Aspect taxonomy live; Elasticsearch query layer |
 | 10 | Kafka and Airflow in place; influence scoring |
 | 12 | React frontend; evaluation results written up |

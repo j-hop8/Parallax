@@ -137,7 +137,8 @@ def test_followers_count_outlets_not_articles():
 def test_q4_panel_has_no_numbers():
     text = _text(render.q4()).replace("Q4", "")
     assert not re.search(r"\d", text)
-    assert "尚未接入" in text and "PTT" in text and "Dcard" in text
+    assert "尚未接入" in text and "Threads" in text and "Facebook" in text
+    assert "PTT" not in text and "Dcard" not in text
 
 
 def test_header_counters_and_footer():
