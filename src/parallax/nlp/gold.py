@@ -18,8 +18,9 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from ..settings import EVAL_DIR
+from ..settings import EVAL_DIR, TIMEZONE
 from .stance import LABELS, lede
 
 GOLD_PATH = EVAL_DIR / "stance_gold.csv"
@@ -402,10 +403,6 @@ def post_label_session(
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> dict[str, int]:
     """Blind post labeling with immediate persistence and optional permalink display."""
-    from zoneinfo import ZoneInfo
-
-    from .. import settings
-
     counts = {"neg": 0, "neu": 0, "pos": 0, "skipped": 0}
     queue = posts[:limit]
     write(
@@ -415,12 +412,12 @@ def post_label_session(
     for i, post in enumerate(queue, 1):
         posted_at = post.get("posted_at")
         time = (
-            posted_at.astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%Y-%m-%d %H:%M")
+            posted_at.astimezone(ZoneInfo(TIMEZONE)).strftime("%Y-%m-%d %H:%M")
             if posted_at is not None
             else "(no time)"
         )
         write("")
-        write(f"[{i}/{len(queue)}] @{post['author']} · {time}")
+        write(f"[{i}/{len(queue)}] @{post.get('author') or '?'} · {time}")
         write(post["text"])
         while True:
             key = read("  n/e/p/s/o/q > ").strip().lower()

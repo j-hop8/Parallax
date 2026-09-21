@@ -118,7 +118,9 @@ journalctl -u parallax-crawl -n 30 --no-pager
 Expected: a `crawl_runs` line per outlet with `ok=True`. Then `make health`
 on the VPS. After ~40 minutes it should show **2 ok runs per outlet and a
 largest gap of ~20 min**. The window from §0 is closed.
-`make health` now includes a Threads block; the token-less host simply shows runs made from the laptop after a DB restore.
+
+`make health` also prints a Threads block (T-018). On the token-less
+host it shows the runs made from the laptop, as of the last restore.
 
 ## 8. Point the laptop at the VPS
 
