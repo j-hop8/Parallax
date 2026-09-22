@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from .. import db
+from ..metrics.lean import PlatformLean
 from ..metrics.report import IncidentReport, OutletRow, build_report
 from ..settings import TIMEZONE
 
@@ -102,6 +103,44 @@ def render_table(r: IncidentReport) -> str:
     return "\n".join(out)
 
 
+# The panel and this block say the same thing in different registers; the codes
+# they map are metrics.lean.Reason, so a new reason fails loudly here rather
+# than printing an empty cell.
+LEAN_REASONS = {
+    "no_posts": "no posts matched this keyword in the window",
+    "unclassified": "no verdicts yet -- run: make stance.posts KEYWORD=<keyword>",
+    "below_floor": "below the floor: {classified} classified < {min_posts}",
+}
+
+# Until eval/post_stance_gold.csv carries >= 100 human rows and the eval reports
+# an F1, every number in this block is a model's opinion nobody has checked.
+POST_STANCE_CAVEAT = (
+    "post stance is model-labeled and unvalidated: no human gold set exists yet, "
+    "so read the split as a signal, not a measurement"
+)
+
+
+def _lean_line(p: PlatformLean) -> str:
+    if p.suppressed_reason is None:
+        n = p.classified
+        lean = (p.pos - p.neg) / n
+        counts = f"{p.neg:>6}{p.neu:>6}{p.pos:>6}"
+        return f"{p.platform:<11}{p.posts:>7}{n:>12}{counts}   {lean:+.2f}"
+    note = LEAN_REASONS[p.suppressed_reason].format(classified=p.classified, min_posts=p.min_posts)
+    dashes = f"{'—':>6}{'—':>6}{'—':>6}"
+    return f"{p.platform:<11}{p.posts:>7}{p.classified:>12}{dashes}   {note}"
+
+
+def render_platform_lean(r: IncidentReport) -> str:
+    """Q4: one line per live platform, counts or the reason they are withheld."""
+    head = f"{'platform':<11}{'posts':>7}{'classified':>12}{'neg':>6}{'neu':>6}{'pos':>6}   lean"
+    out = ["Q4 社群平台傾向", head]
+    out += [_lean_line(p) for p in r.platform_lean] or ["(no window: nothing matched)"]
+    out.append("facebook   parked: no compliant read path")
+    out.append(f"{POST_STANCE_CAVEAT}; prompt {r.post_prompt_version}")
+    return "\n".join(out)
+
+
 def render_clusters(r: IncidentReport) -> str:
     if not r.cluster_views:
         return "Q3 抄襲與框架差異\n(no clusters touch these articles)"
@@ -139,11 +178,13 @@ def render_clusters(r: IncidentReport) -> str:
 def render(r: IncidentReport) -> str:
     if r.empty:
         return f"no articles match {r.keyword!r}"
-    return "\n\n".join([render_header(r), render_table(r), render_clusters(r)])
+    return "\n\n".join(
+        [render_header(r), render_table(r), render_platform_lean(r), render_clusters(r)]
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Incident report for one keyword (Q1–Q3).")
+    parser = argparse.ArgumentParser(description="Incident report for one keyword (Q1–Q4).")
     parser.add_argument("--keyword", required=True)
     parser.add_argument("--since", type=date.fromisoformat, help="first Taipei day, inclusive")
     parser.add_argument("--until", type=date.fromisoformat, help="last Taipei day, inclusive")

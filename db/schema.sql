@@ -213,3 +213,25 @@ CREATE TABLE IF NOT EXISTS social_runs (
     ok BOOLEAN NOT NULL DEFAULT FALSE,
     error TEXT
 );
+
+
+-- Q4 (T-016). Stance is target-dependent, so a post's verdict cannot live in a
+-- single column on social_posts: the same post carries a different stance toward
+-- 沈伯洋 than toward 關稅, and the post-stance gold set is keyed on
+-- (post_url, target) for exactly that reason. Same shape as article_stance,
+-- including the evidence phrase -- a label nobody can audit is not a measurement.
+-- The legacy social_posts.stance_* columns predate this table and stay unused.
+CREATE TABLE IF NOT EXISTS social_post_stance (
+    post_id        BIGINT NOT NULL REFERENCES social_posts (id) ON DELETE CASCADE,
+    target         TEXT   NOT NULL,
+    model          TEXT   NOT NULL,          -- e.g. gemini-3.5-flash-lite
+    prompt_version TEXT   NOT NULL,          -- parallax.nlp.stance.POST_PROMPT_VERSION at write time
+    label          TEXT   NOT NULL CHECK (label IN ('neg', 'neu', 'pos')),
+    confidence     REAL   NOT NULL,          -- the model's own 0..1
+    evidence       TEXT   NOT NULL CHECK (evidence <> ''),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (post_id, target, model, prompt_version)
+);
+
+CREATE INDEX IF NOT EXISTS social_post_stance_target_idx
+    ON social_post_stance (target, model, prompt_version);

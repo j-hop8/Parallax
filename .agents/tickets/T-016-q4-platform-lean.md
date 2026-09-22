@@ -38,6 +38,48 @@ the distribution of stance toward the incident's target.
    article stance note (`STANCE_NOTE`). See memory: article gold is
    Claude-labeled, so this is the first human-labeled stance set either way.
 
+## Decisions (settled 2026-09-22)
+
+1. **Post prompt:** option (a). `POST_SYSTEM_INSTRUCTION` / `POST_PROMPT_VERSION
+   = "post-v1"`, sharing eval/README.md's T-017 label table and naming sarcasm
+   explicitly. One divergence from the human guide, documented in both places:
+   the annotator can press `s` and the model cannot, so where a human skips for
+   missing context the model is told to answer `neu` and say so in its evidence.
+   Skipped rows are absent from the gold file and never reach the F1, but they
+   do sit in the panel's denominator — which is part of why the floor exists.
+
+2. **What counts:** the author's own text, always. `is_quote_post` turned out
+   never to be persisted (`upsert_social_posts` does not store it and the
+   quoted passage is not fetched), so there is no column to skip on and nothing
+   but the author's words to judge — which is what the annotator is told to use
+   too. Media-only posts (empty `text`) are dropped before the model, never sent.
+
+3. **Floor:** `MIN_PLATFORM_POSTS = 30` classified posts per platform per
+   window, env-overridable. Suppression carries a *reason code*
+   (`no_posts` / `unclassified` / `below_floor`), not display text, so the text
+   report and the panel each say it in their own register.
+
+4. **Report seam:** as specified, plus `min_posts` on the row (so a renderer can
+   print the floor without importing settings) and `post_prompt_version` on
+   `IncidentReport`. The lean window is the incident's own Taipei days.
+
+5. **Storage — deviates from "do not touch `db/**`", approved before coding.**
+   The ticket assumed T-015's `social_posts.stance_model` / `prompt_version`
+   were enough. They are not: the table has no **target** column, and stance is
+   target-dependent by design — the same post is `neg` toward one target and
+   `neu` toward another, which is exactly why the gold CSV is keyed on
+   `(post_url, target)`. One inline verdict would mean two active keywords
+   overwrite each other and re-spend quota on every switch, and there is
+   nowhere to put the evidence phrase the article side treats as mandatory.
+   New table `social_post_stance`, mirroring `article_stance`. The legacy
+   `social_posts.stance_*` columns stay unused. **Needs `make db.migrate`.**
+
+## Live
+
+Not yet: `eval/post_stance_gold.csv` does not exist, so there is no post-stance
+F1 and both renderers carry the unvalidated caveat unconditionally. It comes
+out when the file holds ≥ 100 human rows and the eval reports a number here.
+
 ## Files in scope
 
 - `src/parallax/nlp/stance.py` — post prompt variant + `PostStanceInput`

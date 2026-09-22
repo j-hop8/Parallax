@@ -796,17 +796,110 @@ def upsert_social_posts(conn, posts, keyword):
     return inserted
 
 
-def find_social_posts(conn, keyword, platform, since, until):
-    """Find segmented text matches or the original API discovery keyword."""
+# One definition of "this post is about this keyword", shared by the labeling
+# tool, the classifier job and the Q4 lean. If they drifted apart the panel would
+# divide a verdict count by a differently-built denominator -- the same class of
+# silent error invariant 7 exists to prevent. Params: platform, since, until,
+# segmented keyword, keyword.
+_SOCIAL_MATCH_SQL = """
+    p.platform = %s AND p.posted_at >= %s AND p.posted_at < %s
+      AND (to_tsvector('simple', p.text_seg) @@ plainto_tsquery('simple', %s)
+           OR p.fetched_for = %s)
+"""
+
+
+def _social_match_params(keyword: str, platform: str, since, until) -> tuple:
     from .nlp.segment import segment_text
 
+    return (platform, since, until, segment_text(keyword), keyword)
+
+
+def find_social_posts(conn, keyword, platform, since, until):
+    """Find segmented text matches or the original API discovery keyword."""
     return conn.execute(
-        """
-        SELECT * FROM social_posts
-        WHERE platform = %s AND posted_at >= %s AND posted_at < %s
-          AND (to_tsvector('simple', text_seg) @@ plainto_tsquery('simple', %s)
-               OR fetched_for = %s)
-        ORDER BY posted_at DESC, id
+        f"""
+        SELECT p.* FROM social_posts p
+        WHERE {_SOCIAL_MATCH_SQL}
+        ORDER BY p.posted_at DESC, p.id
         """,
-        (platform, since, until, segment_text(keyword), keyword),
+        _social_match_params(keyword, platform, since, until),
     ).fetchall()
+
+
+def get_post_stance(
+    conn: psycopg.Connection, post_id: int, target: str, model: str, prompt_version: str
+) -> dict | None:
+    """The cached verdict for this exact (post, target, model, prompt), if any."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT label, confidence, evidence, created_at
+            FROM social_post_stance
+            WHERE post_id = %s AND target = %s AND model = %s AND prompt_version = %s
+            """,
+            (post_id, target, model, prompt_version),
+        )
+        return cur.fetchone()
+
+
+def save_post_stance(
+    conn: psycopg.Connection,
+    *,
+    post_id: int,
+    target: str,
+    model: str,
+    prompt_version: str,
+    label: str,
+    confidence: float,
+    evidence: str,
+) -> None:
+    """Upsert one post verdict. The key is the cache key, so a re-run overwrites itself."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO social_post_stance
+                (post_id, target, model, prompt_version, label, confidence, evidence)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (post_id, target, model, prompt_version) DO UPDATE
+                SET label = EXCLUDED.label,
+                    confidence = EXCLUDED.confidence,
+                    evidence = EXCLUDED.evidence,
+                    created_at = now()
+            """,
+            (post_id, target, model, prompt_version, label, confidence, evidence),
+        )
+
+
+def post_stance_counts(
+    conn: psycopg.Connection,
+    keyword: str,
+    platform: str,
+    since,
+    until,
+    model: str,
+    prompt_version: str,
+) -> dict:
+    """Raw neg/neu/pos counts for Q4. Suppression is metrics.lean's decision, not SQL's.
+
+    LEFT JOIN on purpose: `posts` counts every matching post in the window --
+    including the media-only ones the classifier skips -- so the panel's
+    "classified / posts" caption cannot overstate how much of the platform was
+    actually read, exactly as the outlet stance bar reports its own shortfall.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT count(*) AS posts,
+                   count(s.label) AS classified,
+                   count(*) FILTER (WHERE s.label = 'neg') AS neg,
+                   count(*) FILTER (WHERE s.label = 'neu') AS neu,
+                   count(*) FILTER (WHERE s.label = 'pos') AS pos
+            FROM social_posts p
+            LEFT JOIN social_post_stance s
+              ON s.post_id = p.id AND s.target = %s AND s.model = %s AND s.prompt_version = %s
+            WHERE {_SOCIAL_MATCH_SQL}
+            """,
+            (keyword, model, prompt_version)
+            + _social_match_params(keyword, platform, since, until),
+        )
+        return cur.fetchone() or {"posts": 0, "classified": 0, "neg": 0, "neu": 0, "pos": 0}

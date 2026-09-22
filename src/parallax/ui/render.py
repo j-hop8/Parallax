@@ -25,6 +25,7 @@ import html
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from ..metrics.lean import PlatformLean
 from ..metrics.propagation import ClusterView, MemberView
 from ..metrics.report import IncidentReport, OutletRow
 from ..settings import TIMEZONE
@@ -34,6 +35,24 @@ TZ = ZoneInfo(TIMEZONE)
 CORE_CHARS = 120
 
 STANCE_NOTE = "立場分數來自「目標依存情緒分析」，判斷對事件當事人的態度，而非文句整體語氣。"
+
+# The Q4 counterpart of STANCE_NOTE, plus the thing the article note does not
+# have to say: article stance has a gold set, post stance has none yet. This
+# line comes out when eval/post_stance_gold.csv reaches 100 human rows and the
+# eval job reports an F1 -- not before, and not because the bar looks lonely.
+POST_STANCE_NOTE = "社群貼文立場由模型標註，尚無人工黃金標準可驗證，請視為訊號而非量測值。"
+
+# metrics.lean.Reason in the panel's register. A reason with no entry here is
+# a KeyError at render time rather than a silently blank bar.
+LEAN_REASONS = {
+    "no_posts": "查無貼文",
+    "unclassified": "尚未分類",
+    "below_floor": "樣本不足",
+}
+
+# Platform display names and the caption shown where there is no data path.
+PLATFORM_NAMES = {"threads": "Threads"}
+PARKED = (("Facebook", "暫緩：無合規資料管道"),)
 
 CSS = """<style>
 .px{--bg:#F5F0E8;--card:#FAF6EF;--ink:#1D1B18;--muted:#8A8478;--line:#DDD5C6;
@@ -262,20 +281,63 @@ def table(r: IncidentReport) -> str:
     )
 
 
-def q4() -> str:
-    # Threads is the phase-2 platform (official keyword-search API). Facebook
-    # stays as a slot so the design holds if a compliant read path ever opens;
-    # today there is none, and the caption says so rather than promising a date.
-    boxes = "".join(
+def lean_box(p: PlatformLean) -> str:
+    """One platform, in the outlet stance bar's grammar: segments over classified.
+
+    Suppressed rows draw the same empty dashed track a never-classified outlet
+    gets and print no digits inside the bar -- the left caption says why, and
+    the right one keeps the honest denominator so a reader can see how much of
+    the platform was read. Widths are computed the same way as stance_bar so
+    the two blocks on the page are measured on one ruler.
+    """
+    name = PLATFORM_NAMES.get(p.platform, p.platform)
+    if p.suppressed_reason is not None:
+        why = LEAN_REASONS[p.suppressed_reason]
+        if p.suppressed_reason == "below_floor":
+            why += f"（{p.classified} / {p.min_posts}）"
+        return (
+            f'<div class="box"><div class="t">{esc(name)}</div>'
+            '<div class="px-stance empty"></div>'
+            f'<div class="px-caption"><span>{why}</span>'
+            f"<span>{p.classified} / {p.posts} 已分類</span></div></div>"
+        )
+    n = p.classified
+    neg = round(100 * p.neg / n, 2)
+    neu = round(100 * p.neu / n, 2)
+    pos = round(100 - neg - neu, 2)
+    segs = "".join(
+        f'<div class="px-seg {cls}" style="width:{w}%"></div>'
+        for cls, w in (("neg", neg), ("neu", neu), ("pos", pos))
+    )
+    return (
+        f'<div class="box"><div class="t">{esc(name)}</div>'
+        f'<div class="px-stance">{segs}</div>'
+        '<div class="px-caption">'
+        f"<span>負 {p.neg} · 中立 {p.neu} · 正 {p.pos}</span>"
+        f"<span>{n} / {p.posts} 已分類</span></div></div>"
+    )
+
+
+def q4(r: IncidentReport) -> str:
+    """Q4 for every live platform, then the parked slots.
+
+    Threads is the phase-2 platform (official keyword-search API). Facebook
+    stays as a slot so the design holds if a compliant read path ever opens;
+    today there is none, and the caption says so rather than promising a date.
+    """
+    boxes = "".join(lean_box(p) for p in r.platform_lean)
+    boxes += "".join(
         f'<div class="box"><div class="t">{name}</div>'
         '<div class="px-stance empty"></div>'
         f'<div class="px-caption"><span>尚未接入</span><span>{when}</span></div></div>'
-        for name, when in (("Threads", "第二階段"), ("Facebook", "暫緩：無合規資料管道"))
+        for name, when in PARKED
     )
     return (
         '<div class="px-section px-q4"><h2>Q4 · 社群平台傾向</h2>'
         '<div class="sub">各社群平台對此事件的情緒分佈</div>'
-        f"{boxes}</div>"
+        f"{boxes}"
+        f'<div class="muted small">{POST_STANCE_NOTE}</div>'
+        "</div>"
     )
 
 
@@ -387,7 +449,7 @@ def page(r: IncidentReport) -> str:
     return (
         '<div class="px">'
         f"{header(r)}"
-        f'<div class="px-grid"><div>{table(r)}</div><div>{q4()}</div></div>'
+        f'<div class="px-grid"><div>{table(r)}</div><div>{q4(r)}</div></div>'
         f"{clusters(r)}{footer(r)}"
         "</div>"
     )

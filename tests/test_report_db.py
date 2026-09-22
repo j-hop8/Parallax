@@ -198,3 +198,118 @@ def test_stance_originality_and_an_indeterminate_cluster(conn):
     assert c.members[0].delta_added == ("只有這版",)
     assert [m.matched for m in c.members] == [True, True, False]
     assert c.shared_core_text == "核心"
+
+
+# ---- Q4 (T-016) ------------------------------------------------------------
+
+
+def _post(cur, at, *, text, keyword=TOKEN) -> int:
+    """A Threads post that find_social_posts will match on fetched_for."""
+    cur.execute(
+        """
+        INSERT INTO social_posts (platform, post_url, author, posted_at, text, text_seg,
+                                  fetched_for, raw_path)
+        VALUES ('threads', %s, 'someone', %s, %s, %s, %s, 'raw/none')
+        RETURNING id
+        """,
+        (
+            f"https://www.threads.net/@a/post/{at.timestamp()}",
+            at,
+            text,
+            segment_text(text),
+            keyword,
+        ),
+    )
+    return cur.fetchone()["id"]
+
+
+def _post_stance(cur, post_id, label, *, target=TOKEN, model="m", pv="post-v9"):
+    cur.execute(
+        """
+        INSERT INTO social_post_stance (post_id, target, model, prompt_version, label,
+                                        confidence, evidence)
+        VALUES (%s, %s, %s, %s, %s, 0.9, 'e')
+        """,
+        (post_id, target, model, pv, label),
+    )
+
+
+def _threads(report):
+    return next(p for p in report.platform_lean if p.platform == "threads")
+
+
+def test_platform_lean_counts_verdicts_and_respects_the_floor(conn):
+    with conn.cursor() as cur:
+        _article(cur, A, T_D1)
+        for i in range(5):
+            pid = _post(cur, T_D1 + timedelta(minutes=i), text=f"{TOKEN} 真是好棒棒 {i}")
+            _post_stance(cur, pid, ("neg", "neu", "pos")[i % 3])
+        _post(cur, T_D1 + timedelta(minutes=9), text=f"{TOKEN} 沒有判決")  # no verdict
+
+    r = build_report(
+        conn, TOKEN, stance_model="m", post_prompt_version="post-v9", min_platform_posts=3
+    )
+    t = _threads(r)
+    assert t.posts == 6, "every matching post is in the denominator, classified or not"
+    assert t.classified == 5
+    assert (t.neg, t.neu, t.pos) == (2, 2, 1)
+    assert t.suppressed_reason is None
+
+    # One above the classified count and the same data is withheld.
+    high = build_report(
+        conn, TOKEN, stance_model="m", post_prompt_version="post-v9", min_platform_posts=6
+    )
+    assert _threads(high).suppressed_reason == "below_floor"
+    assert _threads(high).classified == 5
+
+
+def test_post_verdicts_are_filtered_by_target_model_and_prompt(conn):
+    """The whole reason post stance got its own table: a verdict toward another
+    target must never be counted as this incident's lean."""
+    with conn.cursor() as cur:
+        _article(cur, A, T_D1)
+        pid = _post(cur, T_D1, text=f"{TOKEN} 好棒棒")
+        _post_stance(cur, pid, "neg", target="別的目標")
+        _post_stance(cur, pid, "pos", model="other-model")
+        _post_stance(cur, pid, "pos", pv="post-v1")
+
+    r = build_report(conn, TOKEN, stance_model="m", post_prompt_version="post-v9")
+    assert _threads(r).posts == 1
+    assert _threads(r).classified == 0
+    assert _threads(r).suppressed_reason == "unclassified"
+
+    # The same post, read under the version it was actually labeled with.
+    other = build_report(conn, TOKEN, stance_model="m", post_prompt_version="post-v1")
+    assert _threads(other).classified == 1 and _threads(other).pos == 1
+
+
+def test_the_lean_window_is_the_incidents_taipei_days(conn):
+    """A post from the day before the incident is not this incident's lean, and
+    the window edges are Taipei midnights -- not UTC ones (invariant 3)."""
+    with conn.cursor() as cur:
+        _article(cur, A, T_D2)  # the incident is D2 only
+        inside = _post(cur, T_D2, text=f"{TOKEN} 裡面")  # 01:00 Taipei on D2
+        before = _post(cur, T_D2 - timedelta(hours=2), text=f"{TOKEN} 前一天")  # 23:00 on D1
+        after = _post(cur, T_D2 + timedelta(hours=23, minutes=30), text=f"{TOKEN} 隔天")
+        for pid in (inside, before, after):
+            _post_stance(cur, pid, "neg")
+
+    r = build_report(conn, TOKEN, stance_model="m", post_prompt_version="post-v9")
+    assert (r.first_day, r.last_day) == (D2, D2)
+    assert _threads(r).posts == 1, "only the post inside the Taipei day counts"
+    assert _threads(r).classified == 1
+
+
+def test_no_posts_is_distinguishable_from_no_verdicts(conn):
+    with conn.cursor() as cur:
+        _article(cur, A, T_D1)
+    r = build_report(conn, TOKEN, stance_model="m", post_prompt_version="post-v9")
+    assert _threads(r).suppressed_reason == "no_posts"
+    assert _threads(r).posts == 0
+
+
+def test_an_empty_report_has_no_lean_rather_than_a_zero(conn):
+    """No window means no question to answer; a fabricated 0/0 would read as
+    'nobody posted', which is not what the absence of an incident means."""
+    r = build_report(conn, "zznosuchtoken")
+    assert r.empty and r.platform_lean == ()

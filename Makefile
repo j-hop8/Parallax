@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.eval label dedup label.pairs dedup.eval framing report ui
+.PHONY: social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval label dedup label.pairs dedup.eval framing report ui
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -18,13 +18,14 @@ help:
 	@echo "enrich     tier-2 body fetch for a keyword, e.g. make enrich KEYWORD=沈伯洋"
 	@echo "reextract  re-run body extraction over the raw HTML cache (no fetch) after a parser fix"
 	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"
+	@echo "stance.posts classify a keyword's Threads posts (Q4), ARGS=--dry-run to count first"
 	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
 	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
 	@echo "dedup      rebuild near-duplicate clusters + propagation order (Q3); ARGS=--keyword X narrows"
 	@echo "label.pairs  hand-label candidate pairs into eval/dup_gold.csv (blind)"
 	@echo "dedup.eval   precision/recall of the clusterer against the pair gold set"
 	@echo "framing    per-cluster shared core + what each member added/dropped; ARGS=--summarize spends quota"
-	@echo "report     Q1-Q3 for one keyword as text, e.g. make report KEYWORD=沈伯洋 ARGS=\"--since 2026-08-20\""
+	@echo "report     Q1-Q4 for one keyword as text, e.g. make report KEYWORD=沈伯洋 ARGS=\"--since 2026-08-20\""
 	@echo "ui         the same page in a browser (Streamlit, http://localhost:8501)"
 	@echo "test       pytest"
 	@echo "sched.install  schedule crawl+rollup on this host: launchd on macOS, systemd on Linux"
@@ -111,6 +112,11 @@ reextract:
 
 stance:
 	uv run python -m parallax.jobs.stance --keyword "$(KEYWORD)" $(ARGS)
+
+# Q4. Same quota as `stance` and the same cache-once rule, over posts instead
+# of articles; needs `make social KEYWORD=...` to have run first.
+stance.posts:
+	uv run python -m parallax.jobs.stance_social --keyword "$(KEYWORD)" $(ARGS)
 
 label:
 	uv run python scripts/label_stance.py --keyword "$(KEYWORD)" $(ARGS)
