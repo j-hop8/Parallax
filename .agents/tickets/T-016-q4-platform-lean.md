@@ -105,6 +105,15 @@ list; these two stay, the third was reverted):
 - `src/parallax/metrics/__init__.py` — **reverted.** Exporting `PlatformLean`
   beside the other metrics was consistency, not necessity; nothing imports from
   the package root. Left for a later tidy-up rather than widening this diff.
+- `tests/test_social_job.py` — T-015's `test_schema_mirror` sliced `schema.sql`
+  from `social_posts` to **end of file**, so appending a table below it put
+  `social_post_stance` on the fresh side of a fresh-vs-upgraded comparison and
+  nowhere on the other. Bounded the slice at the close of `social_runs`, which
+  is what "only this ticket's tables" meant; later appends are now inert.
+  No migration file: the table is `CREATE TABLE IF NOT EXISTS` and
+  `make db.migrate` applies `schema.sql` first, so a new table needs none —
+  migrations 001-003 exist for *column* additions, which cannot be expressed
+  that way.
 
 ## Do not touch
 
