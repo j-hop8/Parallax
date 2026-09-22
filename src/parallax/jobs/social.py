@@ -4,6 +4,7 @@ import argparse
 import logging
 import math
 import sys
+import unicodedata
 from datetime import date, datetime, time, timedelta
 from itertools import islice
 from zoneinfo import ZoneInfo
@@ -149,6 +150,15 @@ def status(conn) -> dict:
     return report
 
 
+def _display_width(s: str) -> int:
+    """Terminal cells: East Asian Wide/Fullwidth characters take two."""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in s)
+
+
+def _pad(s: str, width: int) -> str:
+    return s + " " * max(0, width - _display_width(s))
+
+
 def render_status(report) -> str:
     """Format a status snapshot, keeping full errors in the underlying report."""
     if not report["runs"]:
@@ -163,11 +173,11 @@ def render_status(report) -> str:
             "  keyword     last run (Taipei)   ok   seen  new   error",
         ]
         for run in report["runs"]:
-            started = run["started_at"].astimezone(ZoneInfo("Asia/Taipei")).strftime("%m-%d %H:%M")
+            started = run["started_at"].astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%m-%d %H:%M")
             ok = "yes" if run["ok"] else "no"
             error = (run["error"] or "")[:60]
             lines.append(
-                f"  {run['keyword']:<10}  {started}         {ok:<3}  "
+                f"  {_pad(run['keyword'], 10)}  {started}         {ok:<3}  "
                 f"{run['items_seen']:<4}  {run['items_new']:<4}  {error}".rstrip()
             )
     lines.extend(

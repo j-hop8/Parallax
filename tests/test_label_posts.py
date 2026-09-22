@@ -153,6 +153,20 @@ def test_session_is_blind_and_formats_taipei_time(tmp_path):
     assert post(1)["post_url"] not in output
 
 
+def test_session_missing_author_renders_placeholder(tmp_path):
+    output = []
+    post_label_session(
+        [post(1, author=None)],
+        target=TARGET,
+        annotator="human",
+        gold_path=tmp_path / "gold.csv",
+        read=lambda _: "q",
+        write=output.append,
+    )
+    assert "[1/1] @? · 2026-09-14 04:00" in output
+    assert "None" not in "\n".join(output)
+
+
 def test_positive_label_and_limit(tmp_path):
     path = tmp_path / "gold.csv"
     counts = post_label_session(

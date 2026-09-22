@@ -332,6 +332,12 @@ def status_runs():
     ]
 
 
+def test_display_width_and_padding():
+    assert social._display_width("沈伯洋") == 6
+    assert social._display_width("abc") == 3
+    assert social._display_width(social._pad("沈伯洋", 10)) == 10
+
+
 def test_status_render(monkeypatch, status_runs):
     monkeypatch.setattr(settings, "THREADS_DAILY_QUERY_BUDGET", 789)
     report = social.status(StatusConnection(status_runs))
@@ -340,6 +346,10 @@ def test_status_render(monkeypatch, status_runs):
         "threads  budget used 24h: 37 / 789   posts: 412 (2 keywords)   runs 24h: 3 ok, 1 failed"
     )
     failed, ok = output.splitlines()[2:4]
+    header = output.splitlines()[1]
+    last_run_offset = social._display_width(header[: header.index("last run")])
+    assert social._display_width(failed[: failed.index("09-20")]) == last_run_offset
+    assert social._display_width(ok[: ok.index("09-19")]) == last_run_offset
     assert failed.split() == ["沈伯洋", "09-20", "05:59", "no", "0", "0", "失" * 60]
     assert ok.split() == ["萬安", "09-19", "22:10", "yes", "200", "58"]
     assert report["runs"][0]["error"].endswith("TRUNCATED")
