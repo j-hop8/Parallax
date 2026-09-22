@@ -93,7 +93,6 @@ def test_cached_posts_cost_no_quota(fakedb, monkeypatch):
 
 
 def test_media_only_posts_are_never_sent_to_the_model(fakedb, monkeypatch):
-    _, conn = fakedb
     _posts(monkeypatch, [_post(1), _post(2, text=""), _post(3, text="   \n "), _post(4)])
 
     clf = _Classifier({1: "neg", 4: "neu"})
@@ -132,7 +131,6 @@ def test_one_bad_response_does_not_cost_the_batch(fakedb, monkeypatch):
 
 
 def test_daily_quota_stops_the_run_without_failing_the_rest(fakedb, monkeypatch):
-    store, conn = fakedb
     _posts(monkeypatch, [_post(1), _post(2), _post(3)])
 
     clf = _Classifier({1: "neg", 2: DailyQuotaExhausted("m", "PerDay", "20"), 3: "pos"})

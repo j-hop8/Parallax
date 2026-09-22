@@ -92,6 +92,20 @@ out when the file holds ≥ 100 human rows and the eval reports a number here.
 - `scripts/label_stance.py` or `scripts/label_posts.py`; `eval/post_stance_gold.csv`
 - tests for the metric, the report field, and the panel
 
+Added to scope during review (Codex flagged the diff leaking past the original
+list; these two stay, the third was reverted):
+
+- `Makefile` — `make stance.posts`. The list named `jobs/stance_social.py` but
+  not its entry point, and every prior job ticket added its target. Removing it
+  would leave the job reachable only as `uv run python -m ...` and would break
+  the workflow block this ticket adds to `eval/README.md`.
+- `eval/README.md` — decision 1 above requires the post prompt and the
+  annotation guide to agree, and the model/human divergence over `s` has to be
+  written down in the guide or the next annotator will not know about it.
+- `src/parallax/metrics/__init__.py` — **reverted.** Exporting `PlatformLean`
+  beside the other metrics was consistency, not necessity; nothing imports from
+  the package root. Left for a later tidy-up rather than widening this diff.
+
 ## Do not touch
 
 `src/parallax/crawl/**`, `src/parallax/social/**` (T-015's surface — file a
