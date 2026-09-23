@@ -8,9 +8,11 @@ import subprocess
 import sys
 from dataclasses import replace
 
+import pytest
+
 from parallax.metrics.propagation import ClusterView
 from parallax.ui import render
-from tests.test_report_jobs import D1, _cov, _mv, _report
+from tests.test_report_jobs import D1, _cov, _lean, _mv, _report
 
 
 def _text(html: str) -> str:
@@ -134,11 +136,50 @@ def test_followers_count_outlets_not_articles():
     assert "1 家媒體跟進 · 4 篇" in out
 
 
-def test_q4_panel_has_no_numbers():
-    text = _text(render.q4()).replace("Q4", "")
-    assert not re.search(r"\d", text)
-    assert "尚未接入" in text and "Threads" in text and "Facebook" in text
-    assert "PTT" not in text and "Dcard" not in text
+def test_q4_panel_draws_the_threads_split_in_the_stance_bars_grammar():
+    """Same segments, same caption shape as an outlet row -- the two blocks sit
+    side by side on the page and must be read on one ruler."""
+    panel = render.q4(_report())
+    box = panel[panel.index("Threads") :]
+    assert box.count("px-seg") == 3
+    assert sum(_widths(box)) == 100
+    assert "負 70 · 中立 35 · 正 15" in box
+    assert "120 / 400 已分類" in box
+    # The design's parked slot survives: a platform with no read path is not a zero.
+    assert "Facebook" in panel and "暫緩：無合規資料管道" in panel
+    assert "PTT" not in panel and "Dcard" not in panel
+
+
+def test_q4_panel_prints_no_split_digits_when_suppressed():
+    """The counts are in the report; below the floor they must not reach the page."""
+    r = _report(platform_lean=(_lean(posts=40, classified=29, reason="below_floor"),))
+    panel = render.q4(r)
+    threads = panel[panel.index("Threads") : panel.index("Facebook")]
+    assert "px-stance empty" in threads and "px-seg" not in threads
+    assert "樣本不足（29 / 30）" in threads
+    assert "29 / 40 已分類" in threads, "the denominator is still honest"
+    for n in ("負 70", "中立 35", "正 15"):
+        assert n not in threads
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"), [("no_posts", "查無貼文"), ("unclassified", "尚未分類")]
+)
+def test_q4_panel_says_which_kind_of_nothing_it_has(reason, expected):
+    r = _report(platform_lean=(_lean(posts=0, classified=0, reason=reason),))
+    assert expected in _text(render.q4(r))
+
+
+def test_q4_panel_always_carries_the_unvalidated_caveat():
+    """Article stance has a gold set and post stance does not; the panel says so
+    until eval/post_stance_gold.csv reaches 100 human rows."""
+    assert "尚無人工黃金標準" in _text(render.q4(_report()))
+    assert render.POST_STANCE_NOTE != render.STANCE_NOTE
+
+
+def test_q4_panel_is_reachable_from_the_page():
+    out = render.page(_report())
+    assert "px-q4" in out and "120 / 400 已分類" in out
 
 
 def test_header_counters_and_footer():

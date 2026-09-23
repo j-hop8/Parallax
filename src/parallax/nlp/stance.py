@@ -27,17 +27,23 @@ from .gemini import DailyQuotaExhausted, GeminiJSON, Pacer
 
 __all__ = [
     "LABELS",
+    "POST_PROMPT_VERSION",
     "PROMPT_VERSION",
     "DailyQuotaExhausted",  # re-exported: raised out of classify(), callers catch it here
+    "GeminiPostStance",
     "GeminiStance",
     "Pacer",
+    "PostStanceClassifier",
+    "PostStanceInput",
     "StanceClassifier",
     "StanceInput",
     "StanceResult",
     "body_excerpt",
+    "build_post_prompt",
     "build_prompt",
     "lede",
     "parse_response",
+    "post_stance_input",
     "stance_input",
 ]
 
@@ -48,6 +54,11 @@ LABELS: tuple[str, ...] = ("neg", "neu", "pos")
 # Bump whenever SYSTEM_INSTRUCTION or build_prompt changes in a way that could
 # move a verdict. Stored on every row; the eval reports per version.
 PROMPT_VERSION = "v1"
+
+# Posts are a different task on the same label set, so they get their own
+# version namespace. A verdict written under "post-v1" is never mixed with an
+# article verdict written under "v1"; the report filters on one or the other.
+POST_PROMPT_VERSION = "post-v1"
 
 LEDE_PARAGRAPHS = 2
 BODY_EXCERPT_CHARS = 1200
@@ -232,3 +243,129 @@ class GeminiStance:
     def classify(self, inp: StanceInput) -> StanceResult:
         label, confidence, evidence = parse_response(self._llm.generate(build_prompt(inp)))
         return StanceResult(label, confidence, evidence, self.model, PROMPT_VERSION)
+
+
+# ---- posts (T-016) ---------------------------------------------------------
+#
+# A separate prompt rather than a post shoved into `headline`: a Threads post is
+# one short passage written in the first person, where sarcasm is ordinary and a
+# neutral register is not. Asking the article prompt to weigh a "headline and
+# lede" that do not exist invites it to invent structure. eval/README.md's post
+# section gives human annotators these same label definitions; change one and
+# change the other, and bump POST_PROMPT_VERSION.
+#
+# The post's own text is all the model sees. Threads returns `is_quote_post` but
+# upsert_social_posts does not store the quoted passage, and the reply tree is
+# never fetched, so the author's words are the only evidence available -- which
+# is also what the human annotator is told to use.
+
+POST_TEXT_CHARS = 2000
+
+
+@dataclass(frozen=True)
+class PostStanceInput:
+    post_id: int
+    platform: str  # bookkeeping only -- not shown to the model
+    target: str
+    author: str  # bookkeeping only -- not shown to the model
+    text: str
+
+
+class PostStanceClassifier(Protocol):
+    model: str
+    prompt_version: str
+
+    def classify(self, inp: PostStanceInput) -> StanceResult: ...
+
+
+def post_stance_input(row: dict, target: str) -> PostStanceInput:
+    """Build the classifier input from a db.find_social_posts row."""
+    text = (row.get("text") or "").strip()
+    return PostStanceInput(
+        post_id=row["id"],
+        platform=row["platform"],
+        target=target,
+        author=row.get("author") or "",
+        text=text if len(text) <= POST_TEXT_CHARS else text[:POST_TEXT_CHARS].rstrip() + "…",
+    )
+
+
+POST_SYSTEM_INSTRUCTION = """\
+You label the STANCE of one Traditional-Chinese social-media post toward a
+named TARGET.
+
+You are judging the stance the AUTHOR takes toward the target in this post's
+own words. You are NOT judging the post's mood, NOT whether the events are
+good or bad for the target, and NOT whether you agree with the author.
+
+The post text is all you get: no quoted post, no parent thread, no replies, no
+images. Judge what is written.
+
+Labels:
+- neg: casts the target unfavorably -- criticism, blame, ridicule, or attack
+  framing.
+- neu: reports or mentions the target without a clear favorable or unfavorable
+  stance; balanced or factual wording.
+- pos: casts the target favorably -- praise, support, achievement framing, or
+  endorsement.
+
+Sarcasm is ordinary here and it is stance, not noise. Label the INTENDED
+stance: 「真是好棒棒」 aimed at the target is neg, not pos, and the sarcastic
+phrase is the evidence to cite.
+
+Not decisive by itself: merely naming the target, or tagging them in a hashtag;
+heat or profanity aimed at someone else in the post; a bad outcome for the
+target stated flatly.
+
+When the stance depends on something you cannot see -- a bare reaction to an
+unseen quote-post, or text that is only hashtags or emoji -- label it neu and
+say so in the evidence rather than guessing at the missing context.
+
+Respond with JSON only: {"label": "neg"|"neu"|"pos", "confidence": 0..1,
+"evidence": "<the single most decisive phrase, copied verbatim from the post>"}.
+"""
+
+
+def build_post_prompt(inp: PostStanceInput) -> str:
+    """What the model sees. Pure so tests can pin it.
+
+    The author handle is withheld for the same reason the article prompt
+    withholds the outlet: a model that recognises the account can label the
+    account's reputation instead of the post in front of it.
+    """
+    return f"TARGET: {inp.target}\n\nPOST:\n{inp.text or '(none)'}\n"
+
+
+class GeminiPostStance:
+    """Post stance via Gemini -- same backend, schema and parse as GeminiStance.
+
+    Only the system instruction, the prompt and the version differ, so a post
+    verdict and an article verdict are never comparable by accident: they carry
+    different `prompt_version` values and the report filters on one of them.
+    """
+
+    prompt_version = POST_PROMPT_VERSION
+
+    def __init__(
+        self,
+        model: str = STANCE_MODEL,
+        rpm: float = STANCE_RPM,
+        client: Any | None = None,
+        max_attempts: int = 4,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.model = model
+        self._llm = GeminiJSON(
+            model,
+            rpm,
+            system_instruction=POST_SYSTEM_INSTRUCTION,
+            schema=RESPONSE_SCHEMA,
+            client=client,
+            max_attempts=max_attempts,
+            sleep=sleep,
+            purpose="post-stance",
+        )
+
+    def classify(self, inp: PostStanceInput) -> StanceResult:
+        label, confidence, evidence = parse_response(self._llm.generate(build_post_prompt(inp)))
+        return StanceResult(label, confidence, evidence, self.model, POST_PROMPT_VERSION)

@@ -179,6 +179,14 @@ On Threads:
 - A post about the target only in passing → `s`, unless the mention itself
   is pointed.
 
+The model gets these same definitions (`POST_SYSTEM_INSTRUCTION` in
+`src/parallax/nlp/stance.py`); change one and change the other, and bump
+`POST_PROMPT_VERSION`. One place they deliberately differ: you can press `s`
+and the model cannot, so where you would skip for missing context it is told
+to answer `neu` and say so in its evidence. Skipped rows are simply absent from
+this file, so they never reach the F1 — but they do still land in the Q4
+panel's denominator as classified posts, which is why the floor exists.
+
 ## Keys
 
 `n` = neg, `e` = neu, `p` = pos, `s` = skip, `o` = print the permalink,
@@ -190,7 +198,11 @@ column after the session, preserving the other columns.
 ```bash
 make social KEYWORD=沈伯洋
 make label.posts KEYWORD=沈伯洋 ARGS="--n 30 --annotator <you> --seed 1"
+make stance.posts KEYWORD=沈伯洋 ARGS=--dry-run   # what the model would cost
 ```
+
+Label before you classify where you can: the tool never shows a model verdict,
+but knowing one exists is its own anchor.
 
 Posts are shuffled across authors, media-only posts are dropped, and previously
 labeled permalink/target pairs are skipped on subsequent runs. The display

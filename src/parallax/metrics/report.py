@@ -14,16 +14,23 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import psycopg
 
 from .. import db, search
 from ..config import load_outlets
-from ..nlp.stance import PROMPT_VERSION
-from ..settings import MIN_BASELINE_DAYS, MIN_DAILY_DENOMINATOR, STANCE_MODEL, TIMEZONE
+from ..nlp.stance import POST_PROMPT_VERSION, PROMPT_VERSION
+from ..settings import (
+    MIN_BASELINE_DAYS,
+    MIN_DAILY_DENOMINATOR,
+    MIN_PLATFORM_POSTS,
+    STANCE_MODEL,
+    TIMEZONE,
+)
 from .coverage import OutletCoverage, baseline_of, coverage
+from .lean import PLATFORMS, PlatformLean, platform_lean
 from .originality import OutletOriginality, originality
 from .propagation import ClusterView, cluster_view
 
@@ -62,10 +69,12 @@ class IncidentReport:
     span_days: int  # last - first + 1
     rows: tuple[OutletRow, ...]
     cluster_views: tuple[ClusterView, ...]
+    platform_lean: tuple[PlatformLean, ...]  # Q4, one row per live platform
     denominator_as_of: datetime | None
     day_shift: int  # matched articles whose effective day differs from their poll day
     stance_model: str
     prompt_version: str
+    post_prompt_version: str
 
     @property
     def empty(self) -> bool:
@@ -86,6 +95,8 @@ def build_report(
     prompt_version: str = PROMPT_VERSION,
     min_denominator: int = MIN_DAILY_DENOMINATOR,
     min_baseline_days: int = MIN_BASELINE_DAYS,
+    post_prompt_version: str = POST_PROMPT_VERSION,
+    min_platform_posts: int = MIN_PLATFORM_POSTS,
 ) -> IncidentReport:
     _, configured = load_outlets()
     names = {o.code: o.name_zh for o in configured}
@@ -159,6 +170,27 @@ def build_report(
 
     views = tuple(cluster_view(c, id_set) for c in (db.clusters_touching(conn, ids) if ids else []))
 
+    # Q4 reads the same window the article side just used, so the panel answers
+    # "during this incident" rather than "ever". Posts are timestamped by the
+    # platform in UTC; the window edges are Taipei midnights (invariant 3),
+    # half-open so a post at 23:59:59 on the last day is in and the next is out.
+    leans: tuple[PlatformLean, ...] = ()
+    if active:
+        start = since or active[0]
+        end = until or active[-1]
+        lo = datetime.combine(start, time.min, tzinfo=TZ)
+        hi = datetime.combine(end + timedelta(days=1), time.min, tzinfo=TZ)
+        leans = tuple(
+            platform_lean(
+                p,
+                db.post_stance_counts(
+                    conn, keyword, p, lo, hi, stance_model, post_prompt_version
+                ),
+                min_posts=min_platform_posts,
+            )
+            for p in PLATFORMS
+        )
+
     return IncidentReport(
         keyword=keyword,
         since=since,
@@ -172,8 +204,10 @@ def build_report(
         span_days=(active[-1] - active[0]).days + 1 if active else 0,
         rows=tuple(rows),
         cluster_views=views,
+        platform_lean=leans,
         denominator_as_of=db.rollup_as_of(conn),
         day_shift=day_shift,
         stance_model=stance_model,
         prompt_version=prompt_version,
+        post_prompt_version=post_prompt_version,
     )

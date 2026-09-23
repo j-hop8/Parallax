@@ -186,8 +186,13 @@ def test_schema_mirror(conn):
         conn.execute(f"CREATE SCHEMA {name}")
         conn.execute(f"SET LOCAL search_path TO {name}, public")
         if name.endswith("fresh"):
-            # Only this ticket's tables; other schema objects have independent migrations.
-            conn.execute(schema[schema.index("CREATE TABLE IF NOT EXISTS social_posts") :])
+            # Only this ticket's tables; other schema objects have independent
+            # migrations. Bounded at the end of social_runs rather than at end of
+            # file: later tickets append their own tables below (T-016's
+            # social_post_stance), and they are not part of this mirror.
+            social = schema[schema.index("CREATE TABLE IF NOT EXISTS social_posts") :]
+            end = social.index(");", social.index("CREATE TABLE IF NOT EXISTS social_runs")) + 2
+            conn.execute(social[:end])
         else:
             old = schema[schema.index("CREATE TABLE IF NOT EXISTS social_posts") :]
             conn.execute(old[: old.index("ALTER TABLE social_posts")])
