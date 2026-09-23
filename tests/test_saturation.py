@@ -11,8 +11,10 @@ START = datetime(2026, 9, 1, tzinfo=UTC)
 
 
 def run(minute, new=2, seen=20, ok=True, outlet="a"):
-    return dict(outlet=outlet, started_at=START + timedelta(minutes=minute),
-                items_new=new, items_seen=seen, ok=ok)
+    return {
+        "outlet": outlet, "started_at": START + timedelta(minutes=minute),
+        "items_new": new, "items_seen": seen, "ok": ok,
+    }
 
 
 def test_risk_healthy_outlets_and_hand_computed_turnover():
@@ -32,9 +34,9 @@ def test_failed_zero_seen_and_outage_exclusions():
         run(0, 20), run(10, ok=False), run(20, 0, 0), run(40),
         run(60), run(140, 20), run(160),
     ])
-    assert result.excluded == dict(
-        failed=1, first=1, zero_seen=1, anomaly=0, nonpositive_gap=0, outage=1
-    )
+    assert result.excluded == {
+        "failed": 1, "first": 1, "zero_seen": 1, "anomaly": 0, "nonpositive_gap": 0, "outage": 1,
+    }
     assert result.runs == 3
     assert result.at_risk == 0
     assert result.fastest_turnover_minutes == 200
