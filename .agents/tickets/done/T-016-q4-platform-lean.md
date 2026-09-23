@@ -74,6 +74,25 @@ the distribution of stance toward the incident's target.
    New table `social_post_stance`, mirroring `article_stance`. The legacy
    `social_posts.stance_*` columns stay unused. **Needs `make db.migrate`.**
 
+## Review outcome
+
+Codex: `request-changes`, two findings.
+
+1. **Scope** — resolved above: `metrics/__init__.py` reverted, `Makefile` and
+   `eval/README.md` authorized, `tests/test_social_job.py` added as a required fix.
+2. **"No digits when suppressed"** — Codex read the criterion literally (strip
+   every digit from a suppressed row); this ticket keeps the classified/total
+   caption and suppresses only the distribution. **Overruled in favour of
+   keeping the caption**, on the project owner's call. The reason of record:
+   `stance_bar` renders `0 / 10 已分類` and `weight_bar` renders
+   `無分母 · 0 / 3 天`, so withholding the measurement while keeping the
+   denominator *is* the grammar the same criterion asks the panel to match —
+   and stripping it would make "one short of the floor" and "no posts at all"
+   render identically. What is suppressed: no segments, no neg/neu/pos, no lean.
+
+CI on the merged head: `ruff check .` clean, `343 passed`, no
+`Postgres unavailable` skips — the DB-backed Q4 tests ran against Postgres 16.
+
 ## Live
 
 Not yet: `eval/post_stance_gold.csv` does not exist, so there is no post-stance
