@@ -7,11 +7,21 @@ re-asking, shuffles across outlets, and never shows the annotator a verdict.
 
 from __future__ import annotations
 
+from collections import Counter
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
-from parallax.nlp.gold import COLUMNS, GoldRow, append_gold, label_session, load_gold, pending
+from parallax.nlp.gold import (
+    COLUMNS,
+    GoldRow,
+    append_gold,
+    label_session,
+    load_gold,
+    pending,
+    validation_sample,
+)
 
 NOW = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
 
@@ -118,3 +128,93 @@ def test_unknown_key_reprompts_and_skip_writes_nothing(tmp_path):
     assert counts["skipped"] == 1
     assert not path.exists()
     assert any("?" in line for line in out)
+
+
+# ---- validation sampling (T-020) -------------------------------------------
+
+
+def _claude(i, label):
+    return GoldRow(i, "udn", f"https://example.com/{i}", "沈伯洋", label, "claude-opus-5", "")
+
+
+def test_pending_default_is_unchanged_by_the_annotator_parameter():
+    """Every caller before T-020 passes nothing; one label by anyone retires a row."""
+    arts = [_art(i) for i in range(1, 6)]
+    gold = [_claude(1, "neg"), _claude(2, "neu")]
+    assert sorted(a["id"] for a in pending(arts, gold, "沈伯洋", seed=1)) == [3, 4, 5]
+    assert sorted(a["id"] for a in pending(arts, gold, "沈伯洋", seed=1, annotator=None)) == [3, 4, 5]
+
+
+def test_pending_scoped_to_an_annotator_offers_what_others_labeled():
+    """Without this a second annotator can never see a labeled row, so there is
+    no overlap and kappa has nothing to compare."""
+    arts = [_art(i) for i in range(1, 6)]
+    gold = [_claude(1, "neg"), _claude(2, "neu"), replace(_row(3), annotator="jimmy")]
+    todo = pending(arts, gold, "沈伯洋", seed=1, annotator="jimmy")
+    assert sorted(a["id"] for a in todo) == [1, 2, 4, 5], "only jimmy's own row is retired"
+
+
+def test_validation_sample_offers_only_rows_someone_else_labeled():
+    arts = [_art(i) for i in range(1, 8)]
+    gold = [_claude(i, "neu") for i in (1, 2, 3)]
+    picked = validation_sample(arts, gold, "沈伯洋", "jimmy", n=10, seed=1)
+    assert sorted(a["id"] for a in picked) == [1, 2, 3], "4-7 are unlabeled, not validation work"
+
+
+def test_validation_sample_skips_what_this_annotator_already_relabeled():
+    arts = [_art(i) for i in range(1, 5)]
+    gold = [_claude(1, "neu"), _claude(2, "neg")]
+    gold.append(GoldRow(1, "udn", "u", "沈伯洋", "neu", "jimmy", ""))
+    assert [a["id"] for a in validation_sample(arts, gold, "沈伯洋", "jimmy", n=10, seed=1)] == [2]
+
+
+def test_validation_sample_is_stratified_proportionally_not_evenly():
+    """Kappa is prevalence-sensitive: expected agreement comes from the
+    marginals, so an evenly-sampled overlap would estimate kappa for a corpus
+    that does not exist. A 4:2:1 pool must stay roughly 4:2:1."""
+    arts = [_art(i) for i in range(1, 8)]
+    labels = {1: "neu", 2: "neu", 3: "neu", 4: "neu", 5: "neg", 6: "neg", 7: "pos"}
+    gold = [_claude(i, lab) for i, lab in labels.items()]
+    picked = validation_sample(arts, gold, "沈伯洋", "jimmy", n=4, seed=3)
+    dist = Counter(labels[a["id"]] for a in picked)
+    assert sum(dist.values()) == 4, "largest-remainder rounding must hit n exactly"
+    assert dist["neu"] == 2 and dist["neg"] == 1 and dist["pos"] == 1
+
+
+def test_validation_sample_handles_a_pool_smaller_than_n_and_an_empty_one():
+    arts = [_art(i) for i in range(1, 5)]
+    gold = [_claude(1, "neu"), _claude(2, "neg")]
+    assert len(validation_sample(arts, gold, "沈伯洋", "jimmy", n=999, seed=1)) == 2
+    assert validation_sample(arts, [], "沈伯洋", "jimmy", n=5, seed=1) == []
+
+
+def test_validation_sample_is_reproducible_under_a_seed():
+    arts = [_art(i) for i in range(1, 12)]
+    gold = [_claude(i, "neu") for i in range(1, 9)]
+    first = [a["id"] for a in validation_sample(arts, gold, "沈伯洋", "jimmy", n=5, seed=7)]
+    again = [a["id"] for a in validation_sample(arts, gold, "沈伯洋", "jimmy", n=5, seed=7)]
+    assert first == again
+
+
+def test_a_validation_session_never_shows_the_existing_label(tmp_path):
+    """Blindness is the whole point: knowing claude said `neg` is exactly the
+    anchor --validate exists to avoid."""
+    path = tmp_path / "gold.csv"
+    append_gold(path, _claude(1, "neg"))
+    shown: list[str] = []
+    label_session(
+        [_art(1)],
+        target="沈伯洋",
+        annotator="jimmy",
+        gold_path=path,
+        read=iter(["p"]).__next__,
+        write=shown.append,
+        now=lambda: NOW,
+    )
+    transcript = "\n".join(shown)
+    assert "neg" not in transcript
+    assert "claude-opus-5" not in transcript
+    # and the second opinion is recorded beside the first, not over it
+    rows = load_gold(path)
+    assert len(rows) == 2
+    assert {r.annotator: r.label for r in rows} == {"claude-opus-5": "neg", "jimmy": "pos"}

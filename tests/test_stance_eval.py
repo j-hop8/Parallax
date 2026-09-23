@@ -9,7 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from parallax.nlp.eval import accuracy, confusion, macro_f1, per_class
+from parallax.nlp.eval import (
+    accuracy,
+    agreement,
+    cohens_kappa,
+    confusion,
+    macro_f1,
+    per_class,
+)
 
 
 def test_perfect_predictions_score_one():
@@ -70,3 +77,68 @@ def test_macro_f1_averages_over_labels_present_not_all_three():
     assert macro_f1(["neg", "neu"], ["neg", "neu"]) == 1.0
     # ...but a class the model *predicted* wrongly does count, even if gold lacks it.
     assert macro_f1(["neg", "neu"], ["neg", "pos"]) == pytest.approx((1.0 + 0.0 + 0.0) / 3)
+
+
+# ---- annotator agreement (T-020) -------------------------------------------
+
+
+def test_cohens_kappa_matches_a_hand_computed_case():
+    """The textbook 2x2: 50 items, 35 agreed, marginals .50/.50 and .60/.40.
+
+    observed = 35/50 = .70
+    expected = .50*.60 + .50*.40 = .30 + .20 = .50
+    kappa    = (.70 - .50) / (1 - .50) = .40
+    """
+    a = ["pos"] * 20 + ["pos"] * 5 + ["neg"] * 15 + ["neg"] * 10
+    b = ["pos"] * 20 + ["neg"] * 5 + ["neg"] * 15 + ["pos"] * 10
+    assert cohens_kappa(a, b) == pytest.approx(0.40)
+
+
+def test_kappa_is_symmetric():
+    a = ["neg", "neu", "pos", "neu", "neg"]
+    b = ["neg", "neu", "neu", "neu", "pos"]
+    assert cohens_kappa(a, b) == pytest.approx(cohens_kappa(b, a))
+
+
+def test_high_raw_agreement_on_a_skewed_set_is_not_high_kappa():
+    """The reason kappa exists here at all. Two annotators who both call almost
+    everything neutral agree 90% of the time by accident; a raw agreement number
+    would call that validation."""
+    a = ["neu"] * 18 + ["neg", "pos"]
+    b = ["neu"] * 18 + ["pos", "neg"]
+    assert accuracy(a, b) == pytest.approx(0.90)
+    assert cohens_kappa(a, b) < 0.1
+
+
+def test_perfect_agreement_on_one_label_returns_one_not_a_zero_division():
+    """Degenerate: both used a single label and it matched, so expected
+    agreement is 1 and kappa is 0/0. Reported as 1.0 -- n travels with it."""
+    assert cohens_kappa(["neu"] * 10, ["neu"] * 10) == 1.0
+
+
+def test_total_disagreement_is_negative():
+    assert cohens_kappa(["neg"] * 5 + ["pos"] * 5, ["pos"] * 5 + ["neg"] * 5) == pytest.approx(-1.0)
+
+
+def test_kappa_length_mismatch_is_an_error_not_a_silent_truncation():
+    with pytest.raises(ValueError, match="length mismatch"):
+        cohens_kappa(["neg"], ["neg", "pos"])
+
+
+def test_agreement_joins_on_the_item_never_on_csv_order():
+    """Two annotators label overlapping but different subsets in whatever order
+    they were offered. Zipping the two orderings would compare unrelated
+    articles and report a confident, meaningless number."""
+    human = {1: "neg", 2: "neu", 3: "pos", 4: "neg"}
+    machine = {3: "pos", 2: "neu", 9: "neg"}  # different order, only 2 and 3 shared
+    ag = agreement("jimmy", human, "claude-opus-5", machine)
+    assert ag.n == 2
+    assert ag.observed == 1.0
+    assert (ag.a, ag.b) == ("jimmy", "claude-opus-5")
+    assert ag.confusion["neu"]["neu"] == 1 and ag.confusion["pos"]["pos"] == 1
+
+
+def test_agreement_on_an_empty_overlap_does_not_divide_by_zero():
+    ag = agreement("jimmy", {1: "neg"}, "claude-opus-5", {2: "neg"})
+    assert (ag.n, ag.observed, ag.kappa) == (0, 0.0, 0.0)
+    assert ag.confusion == {}

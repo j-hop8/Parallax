@@ -246,3 +246,83 @@ def test_eval_main_with_classify_fills_missing_then_scores(monkeypatch, tmp_path
     out = capsys.readouterr().out
     assert "n=2" in out and "missing" not in out
     assert conn.commits == 2
+
+
+# ---- annotator agreement and the duplicate guard (T-020) --------------------
+
+
+def _by(i, label, annotator, target="沈伯洋"):
+    return GoldRow(i, "udn", f"u{i}", target, label, annotator, "2026-09-13")
+
+
+def test_duplicate_keys_finds_rows_two_annotators_labeled():
+    gold = [_by(1, "neg", "claude-opus-5"), _by(1, "neu", "jimmy"), _by(2, "pos", "claude-opus-5")]
+    dupes = ev.duplicate_keys(gold)
+    assert list(dupes) == [(1, "沈伯洋")]
+    assert dupes[(1, "沈伯洋")] == ["claude-opus-5", "jimmy"]
+
+
+def test_eval_refuses_to_double_count_an_overlapping_row(monkeypatch, tmp_path, capsys):
+    """Both opinions joined to one verdict would weight the validated rows
+    double and quietly move the F1. Refuse, naming the annotators."""
+    monkeypatch.setattr(
+        ev, "load_gold", lambda p: [_by(1, "neg", "claude-opus-5"), _by(1, "neu", "jimmy")]
+    )
+    monkeypatch.setattr(ev, "RUNS_DIR", tmp_path)
+
+    assert ev.main(["--model", "m"]) == 2
+    out = capsys.readouterr().out
+    assert "more than one annotator" in out
+    assert "claude-opus-5" in out and "jimmy" in out
+    assert not list(tmp_path.glob("*.json")), "a refused run writes nothing"
+
+
+def test_annotator_filter_makes_an_overlapping_set_scoreable(monkeypatch, tmp_path, capsys):
+    conn = _Conn()
+    monkeypatch.setattr(ev.db, "connect", lambda: contextlib.nullcontext(conn))
+    monkeypatch.setattr(ev.db, "get_stance", lambda *a: {"label": "neg"})
+    monkeypatch.setattr(
+        ev, "load_gold", lambda p: [_by(1, "neg", "claude-opus-5"), _by(1, "neu", "jimmy")]
+    )
+    monkeypatch.setattr(ev, "RUNS_DIR", tmp_path)
+
+    assert ev.main(["--model", "m", "--annotator", "jimmy"]) == 0
+    out = capsys.readouterr().out
+    assert "jimmy (1)" in out
+    assert "claude-opus-5" not in out, "the other annotator's row is out of scope, not merged"
+
+
+def test_agreement_report_needs_no_database_and_no_quota(monkeypatch, capsys):
+    """It compares annotators, not a model -- connecting or constructing a
+    classifier would be a bug, and on this path both would raise."""
+
+    def _no_db():
+        raise AssertionError("--agreement must not open a connection")
+
+    class _Boom:
+        def __init__(self, *a, **k):
+            raise AssertionError("--agreement must not construct a classifier")
+
+    monkeypatch.setattr(ev.db, "connect", _no_db)
+    monkeypatch.setattr(ev, "GeminiStance", _Boom)
+    monkeypatch.setattr(
+        ev,
+        "load_gold",
+        lambda p: [
+            _by(1, "neg", "claude-opus-5"),
+            _by(2, "neu", "claude-opus-5"),
+            _by(1, "neg", "jimmy"),
+            _by(2, "pos", "jimmy"),
+        ],
+    )
+    assert ev.main(["--agreement"]) == 0
+    out = capsys.readouterr().out
+    assert "claude-opus-5" in out and "jimmy" in out
+    assert "kappa" in out and "n=2" in out
+
+
+def test_agreement_says_so_when_only_one_annotator_exists(monkeypatch, capsys):
+    monkeypatch.setattr(ev, "load_gold", lambda p: [_by(1, "neg", "claude-opus-5")])
+    assert ev.main(["--agreement"]) == 0
+    out = capsys.readouterr().out
+    assert "only one annotator" in out and "label.validate" in out
