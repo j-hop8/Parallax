@@ -207,7 +207,7 @@ def test_a_validation_session_never_shows_the_existing_label(tmp_path):
         target="沈伯洋",
         annotator="jimmy",
         gold_path=path,
-        read=iter(["p"]).__next__,
+        read=lambda _: "p",
         write=shown.append,
         now=lambda: NOW,
     )

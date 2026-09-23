@@ -101,13 +101,22 @@ def test_kappa_is_symmetric():
 
 
 def test_high_raw_agreement_on_a_skewed_set_is_not_high_kappa():
-    """The reason kappa exists here at all. Two annotators who both call almost
-    everything neutral agree 90% of the time by accident; a raw agreement number
-    would call that validation."""
-    a = ["neu"] * 18 + ["neg", "pos"]
-    b = ["neu"] * 18 + ["pos", "neg"]
-    assert accuracy(a, b) == pytest.approx(0.90)
-    assert cohens_kappa(a, b) < 0.1
+    """The reason kappa exists here at all.
+
+    Both annotators call 90% of a set neutral, so they agree 80% of the time --
+    a number that reads like validation. But they never once agree on which
+    items are negative, and chance alone would have produced 82% agreement on
+    marginals this skewed. Kappa is slightly negative: worse than guessing.
+
+      observed = 40/50 = .80
+      expected = .9*.9 + .1*.1 = .82
+      kappa    = (.80 - .82) / (1 - .82) = -0.111...
+    """
+    a = ["neu"] * 40 + ["neu"] * 5 + ["neg"] * 5
+    b = ["neu"] * 40 + ["neg"] * 5 + ["neu"] * 5
+    assert accuracy(a, b) == pytest.approx(0.80), "raw agreement looks reassuring"
+    assert cohens_kappa(a, b) == pytest.approx(-0.02 / 0.18)
+    assert cohens_kappa(a, b) < 0, "and kappa says it is no better than chance"
 
 
 def test_perfect_agreement_on_one_label_returns_one_not_a_zero_division():
