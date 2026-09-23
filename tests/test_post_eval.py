@@ -209,7 +209,7 @@ def test_database_url_join_survives_changed_id_and_filters_cache():
             ("政策", "test", "old", "pos"),
         ]:
             db.save_post_stance(conn, post_id=new_id, target=target, model=model,
-                                prompt_version=prompt, label=label, confidence=1, evidence="")
+                                prompt_version=prompt, label=label, confidence=1, evidence="政策立場")
         assert db.post_stance_for_urls(conn, [url], "政策", "test", "post-v1") == [
             {"post_url": url, "platform": "threads", "label": "neg"},
         ]
