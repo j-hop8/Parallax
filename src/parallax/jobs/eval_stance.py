@@ -181,8 +181,10 @@ def render_agreement(gold: list[GoldRow]) -> str:
         flag = "  <-- below target" if p.kappa <= KAPPA_TARGET else ""
         lines += [
             f"  {p.a}  vs  {p.b}",
-            f"    n={p.n}  agreed {p.observed:.1%}  expected by chance {p.expected:.1%}"
-            f"  kappa {p.kappa:.3f}{flag}",
+            (
+                f"    n={p.n}  agreed {p.observed:.1%}  expected by chance "
+                f"{p.expected:.1%}  kappa {p.kappa:.3f}{flag}"
+            ),
         ]
         if p.n < 50:
             lines.append(f"    n={p.n} is small; treat kappa as a direction, not a verdict.")
