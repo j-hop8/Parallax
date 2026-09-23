@@ -870,6 +870,22 @@ def save_post_stance(
         )
 
 
+def post_stance_for_urls(conn, urls, target, model, prompt_version) -> list[dict]:
+    """Cached post verdicts joined by stable permalink, not a gold file's old id."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT p.post_url, p.platform, s.label
+            FROM social_posts p
+            JOIN social_post_stance s ON s.post_id = p.id
+            WHERE p.post_url = ANY(%s)
+              AND s.target = %s AND s.model = %s AND s.prompt_version = %s
+            """,
+            (sorted(urls), target, model, prompt_version),
+        )
+        return cur.fetchall()
+
+
 def post_stance_counts(
     conn: psycopg.Connection,
     keyword: str,

@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval label dedup label.pairs dedup.eval framing report ui
+.PHONY: social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval posts.eval label dedup label.pairs dedup.eval framing report ui
 
 help:
 	@echo "setup      install deps into .venv via uv"
@@ -20,6 +20,7 @@ help:
 	@echo "stance     classify a keyword's enriched articles (Q1), ARGS=--dry-run to count first"
 	@echo "stance.posts classify a keyword's Threads posts (Q4), ARGS=--dry-run to count first"
 	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
+	@echo "posts.eval   score post stance against the post gold set (ARGS=--classify spends quota)"
 	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
 	@echo "dedup      rebuild near-duplicate clusters + propagation order (Q3); ARGS=--keyword X narrows"
 	@echo "label.pairs  hand-label candidate pairs into eval/dup_gold.csv (blind)"
@@ -123,6 +124,9 @@ label:
 
 label.posts:
 	uv run python scripts/label_posts.py --keyword "$(KEYWORD)" $(ARGS)
+
+posts.eval:
+	uv run python -m parallax.jobs.eval_posts $(ARGS)
 
 stance.eval:
 	uv run python -m parallax.jobs.eval_stance $(ARGS)
