@@ -198,12 +198,26 @@ def test_validation_sample_is_reproducible_under_a_seed():
 
 def test_a_validation_session_never_shows_the_existing_label(tmp_path):
     """Blindness is the whole point: knowing claude said `neg` is exactly the
-    anchor --validate exists to avoid."""
+    anchor --validate exists to avoid.
+
+    The article row carries every verdict field a real db row would, under
+    sentinel values, so a leak shows up as the sentinel rather than as a word
+    that also appears in the running tally. The tally legend
+    ("labeled 1: neg 0 / neu 0 / pos 1") names all three labels by design and
+    is excluded -- it reports this session's own counts, not a stored verdict.
+    """
     path = tmp_path / "gold.csv"
     append_gold(path, _claude(1, "neg"))
+    article = _art(1) | {
+        "stance_label": "neg",
+        "stance_score": 0.97,
+        "stance_model": "SENTINEL-MODEL",
+        "prompt_version": "SENTINEL-PROMPT",
+        "evidence": "SENTINEL-EVIDENCE",
+    }
     shown: list[str] = []
     label_session(
-        [_art(1)],
+        [article],
         target="沈伯洋",
         annotator="jimmy",
         gold_path=path,
@@ -211,9 +225,10 @@ def test_a_validation_session_never_shows_the_existing_label(tmp_path):
         write=shown.append,
         now=lambda: NOW,
     )
-    transcript = "\n".join(shown)
-    assert "neg" not in transcript
-    assert "claude-opus-5" not in transcript
+    presentation = "\n".join(line for line in shown if "labeled " not in line)
+    for leak in ("SENTINEL-MODEL", "SENTINEL-PROMPT", "SENTINEL-EVIDENCE", "0.97", "claude"):
+        assert leak not in presentation, f"{leak!r} reached the annotator"
+    assert "neg" not in presentation, "the stored verdict must not appear"
     # and the second opinion is recorded beside the first, not over it
     rows = load_gold(path)
     assert len(rows) == 2
