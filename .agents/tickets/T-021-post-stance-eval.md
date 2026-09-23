@@ -85,6 +85,8 @@ Write the JSON report to `eval/runs/` exactly as `stance.eval` does. Add a
 - The job joins on `post_url`; a test proves a changed `post_id` does not break
   the join.
 
+- Ticket file moved to `.agents/tickets/done/`.
+
 ## Verify
 
 ```bash

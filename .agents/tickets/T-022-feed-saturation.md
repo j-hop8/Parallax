@@ -102,6 +102,8 @@ reporting gaps as it does today.
   same refusal-to-guess rule as `MIN_DAILY_DENOMINATOR`.
 - Timestamps are `Asia/Taipei` (invariant 3).
 
+- Ticket file moved to `.agents/tickets/done/`.
+
 ## Verify
 
 ```bash
