@@ -10,6 +10,23 @@ change the other and bump `PROMPT_VERSION`. Human and model must be scored
 against one definition of the task, or F1 measures disagreement about what
 "stance" means instead of how good the classifier is.
 
+## Re-attaching this file to a rebuilt database
+
+`article_id` belongs to the database, not to the article. After a restore or a
+re-crawl those ids point at nothing, which would strand every label here.
+
+```bash
+make gold.remap                 # dry run: what would move
+make gold.remap ARGS=--write    # re-key by URL
+```
+
+It matches on `(outlet, canonicalize(url))` against `article_index`'s UNIQUE
+key, so a hit is exact. Rows whose article is not back yet keep their id and
+are listed as pending — a re-crawl fills in over days, so run it again. Two
+rows resolving to one id stops the whole file rather than writing a corrupt
+join. The CSV is committed, so `git diff eval/stance_gold.csv` is the review
+and `git checkout` is the undo.
+
 ## Provenance — read this before quoting an F1
 
 The `annotator` column says who wrote each label. **As of 2026-09-13 every
@@ -141,6 +158,16 @@ with different labels; that is correct, not a duplicate.
 `dup_gold.csv` holds labeled article pairs for the clusterer (proposal §9:
 **precision > 0.90, recall > 0.80** on 200 pairs). Same provenance rule as the
 stance set: the `annotator` column says who labeled, and the eval prints it.
+
+> **⚠ This file cannot survive losing the database.** Its columns are
+> `article_a, article_b` — raw ids and nothing else. Ids belong to the
+> database; the articles they point at do not come back with the same ones.
+> The stance set stores the `url` beside the id and is therefore re-attachable
+> (`make gold.remap`, T-025); these 118 pairs are not.
+>
+> The Mac Mini rebuild on 2026-09-25 lost them. **Before labeling more pairs,
+> add `url_a` and `url_b` columns** so the next rebuild does not. T-017 already
+> learned this for posts and keys on the permalink for exactly this reason.
 
 ## The question
 

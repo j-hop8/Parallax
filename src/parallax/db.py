@@ -950,3 +950,31 @@ def crawl_runs_window(conn: psycopg.Connection, since: datetime) -> list[dict]:
             {"since": since},
         )
         return cur.fetchall()
+
+
+def article_ids_by_canonical(
+    conn: psycopg.Connection, pairs: Iterable[tuple[str, str]]
+) -> dict[tuple[str, str], int]:
+    """{(outlet, url_canonical): id} for the pairs that exist. Missing keys are absent.
+
+    The join is on article_index's UNIQUE (outlet, url_canonical), so a hit is
+    exact rather than a guess. Used to re-key the stance gold set after a
+    re-crawl: ids are assigned by the database and do not survive losing it,
+    while the URL a human labelled does (T-025).
+    """
+    rows = list(pairs)
+    if not rows:
+        return {}
+    outlets = [o for o, _ in rows]
+    canons = [c for _, c in rows]
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ai.outlet, ai.url_canonical, ai.id
+            FROM article_index ai
+            JOIN unnest(%s::text[], %s::text[]) AS g(outlet, canon)
+              ON ai.outlet = g.outlet AND ai.url_canonical = g.canon
+            """,
+            (outlets, canons),
+        )
+        return {(r["outlet"], r["url_canonical"]): r["id"] for r in cur.fetchall()}
