@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Iterable, Iterator
+from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
@@ -903,3 +904,33 @@ def post_stance_counts(
             + _social_match_params(keyword, platform, since, until),
         )
         return cur.fetchone() or {"posts": 0, "classified": 0, "neg": 0, "neu": 0, "pos": 0}
+
+
+def crawl_runs_window(conn: psycopg.Connection, since: datetime) -> list[dict]:
+    """Read window rows plus each active outlet's preceding successful poll.
+
+    Context prevents the first row in the window being mistaken for a backfill.
+    No metric exclusions are applied here; the pure caller receives `since` too.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH window_runs AS (
+                SELECT outlet, started_at, items_seen, items_new, ok
+                FROM crawl_runs WHERE started_at >= %(since)s
+            ), previous AS (
+                SELECT DISTINCT ON (r.outlet)
+                       r.outlet, r.started_at, r.items_seen, r.items_new, r.ok
+                FROM crawl_runs r
+                WHERE r.started_at < %(since)s AND r.ok
+                  AND r.outlet IN (SELECT outlet FROM window_runs)
+                ORDER BY r.outlet, r.started_at DESC, r.run_id DESC
+            )
+            SELECT * FROM window_runs
+            UNION ALL
+            SELECT * FROM previous
+            ORDER BY outlet, started_at
+            """,
+            {"since": since},
+        )
+        return cur.fetchall()
