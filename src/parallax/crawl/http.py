@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 class Fetcher:
     """HTTP client with a per-host minimum delay.
 
-    Outlets are polled every 20 minutes from a single machine; the delay exists
+    Outlets are polled every 10 minutes from a single machine; the delay exists
     so that a burst of requests to one host stays well inside anything a news
     site would consider reasonable, and so a retry storm cannot turn into
     hammering. The User-Agent identifies the project and a contact address.
@@ -80,7 +80,7 @@ class Fetcher:
 
 def wait_for_network(
     probe_hosts: tuple[str, ...] = ("feeds.feedburner.com", "news.ltn.com.tw"),
-    timeout: float = 120.0,
+    timeout: float = 60.0,
     interval: float = 5.0,
 ) -> bool:
     """Block until DNS and TCP to a real outlet host work, or give up.

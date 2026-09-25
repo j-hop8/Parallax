@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--wait-network",
         type=float,
-        default=120.0,
+        default=60.0,
         metavar="SECONDS",
         help="wait up to SECONDS for connectivity before crawling (0 disables)",
     )
@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     empty = [r.outlet for r in results if r.ok and r.items_seen == 0]
     if empty:
         # Not an error exit -- an outlet can legitimately publish nothing in a
-        # 20-minute window -- but it is the signature of a broken selector, so
+        # 10-minute window -- but it is the signature of a broken selector, so
         # it gets said out loud rather than buried in the counts.
         log.warning("returned zero items: %s", ", ".join(empty))
 
