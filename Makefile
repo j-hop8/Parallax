@@ -1,7 +1,7 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: saturation social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval posts.eval label dedup label.pairs dedup.eval framing report ui
+.PHONY: saturation social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval posts.eval label label.validate stance.agreement dedup label.pairs dedup.eval framing report ui
 
 help:
 	@echo "saturation feed-window pressure, ARGS=\"--days 30\" for a longer window"
@@ -23,6 +23,8 @@ help:
 	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
 	@echo "posts.eval   score post stance against the post gold set (ARGS=--classify spends quota)"
 	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
+	@echo "label.validate  relabel another annotator's rows blind, to measure agreement"
+	@echo "stance.agreement  pairwise annotator kappa; no database, no quota"
 	@echo "dedup      rebuild near-duplicate clusters + propagation order (Q3); ARGS=--keyword X narrows"
 	@echo "label.pairs  hand-label candidate pairs into eval/dup_gold.csv (blind)"
 	@echo "dedup.eval   precision/recall of the clusterer against the pair gold set"
@@ -122,6 +124,15 @@ stance.posts:
 
 label:
 	uv run python scripts/label_stance.py --keyword "$(KEYWORD)" $(ARGS)
+
+# T-020. Every gold row in this repo was written by claude-opus-5, so the F1
+# measures two models agreeing. These two close that gap: relabel a stratified
+# sample of someone else's rows blind, then compare with kappa.
+label.validate:
+	uv run python scripts/label_stance.py --keyword "$(KEYWORD)" --validate $(ARGS)
+
+stance.agreement:
+	uv run python -m parallax.jobs.eval_stance --agreement $(ARGS)
 
 label.posts:
 	uv run python scripts/label_posts.py --keyword "$(KEYWORD)" $(ARGS)

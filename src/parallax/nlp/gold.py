@@ -83,18 +83,92 @@ def append_gold(path: Path, row: GoldRow) -> None:
 
 
 def pending(
-    articles: Iterable[dict], gold: Iterable[GoldRow], target: str, seed: int | None = None
+    articles: Iterable[dict],
+    gold: Iterable[GoldRow],
+    target: str,
+    seed: int | None = None,
+    annotator: str | None = None,
 ) -> list[dict]:
     """Articles for `target` not yet labeled, shuffled across outlets.
 
     Shuffled because find_enriched_articles returns newest-first, which tends to
     cluster one outlet's run of stories together; labeling ten udn pieces in a
     row primes the annotator. A fixed seed makes a session reproducible.
+
+    `annotator` scopes what "already labeled" means. Left None -- every caller
+    before T-020 -- one label by anyone retires a row, which is what a growing
+    gold set wants. Set to a name, only that person's labels retire a row, so a
+    second annotator is offered what the first already did. That is the whole
+    mechanism behind measuring agreement: without it the CSV can only ever hold
+    one opinion per article and kappa has nothing to compare.
     """
-    done = {(g.article_id, g.target) for g in gold}
+    done = {
+        (g.article_id, g.target)
+        for g in gold
+        if annotator is None or g.annotator == annotator
+    }
     todo = [a for a in articles if (a["id"], target) not in done]
     random.Random(seed).shuffle(todo)
     return todo
+
+
+def validation_sample(
+    articles: Iterable[dict],
+    gold: Iterable[GoldRow],
+    target: str,
+    annotator: str,
+    *,
+    n: int,
+    seed: int | None = None,
+) -> list[dict]:
+    """A stratified sample of rows someone *else* already labeled, for kappa.
+
+    Candidates are articles carrying a label from another annotator and none
+    from this one. The annotator relabels them blind; the two opinions are then
+    compared by `nlp.eval.agreement`.
+
+    Stratified **proportionally to the existing label distribution**, not evenly
+    across the three classes. Kappa is prevalence-sensitive: expected agreement
+    is computed from the marginals, so an evenly-sampled overlap would report
+    kappa for a corpus that does not exist -- flattering on a set that is mostly
+    neutral, because it quietly removes the easy agreements chance would
+    produce. Proportional sampling estimates the same quantity labeling the
+    whole set would. Largest-remainder rounding, so the sample totals `n`
+    instead of drifting a row or two short.
+    """
+    mine = {g.article_id for g in gold if g.target == target and g.annotator == annotator}
+    theirs: dict[int, str] = {
+        g.article_id: g.label
+        for g in gold
+        if g.target == target and g.annotator != annotator and g.article_id not in mine
+    }
+    by_id = {a["id"]: a for a in articles}
+    pool: dict[str, list[dict]] = {lab: [] for lab in LABELS}
+    for aid, label in theirs.items():
+        if aid in by_id:
+            pool[label].append(by_id[aid])
+
+    rng = random.Random(seed)
+    for bucket in pool.values():
+        rng.shuffle(bucket)
+
+    total = sum(len(v) for v in pool.values())
+    want = min(n, total)
+    if want == 0:
+        return []
+    exact = {lab: want * len(v) / total for lab, v in pool.items()}
+    take = {lab: min(int(x), len(pool[lab])) for lab, x in exact.items()}
+    # Largest remainder, capped by what each bucket actually holds.
+    while sum(take.values()) < want:
+        candidates = [lab for lab in LABELS if take[lab] < len(pool[lab])]
+        if not candidates:
+            break
+        lab = max(candidates, key=lambda x: (exact[x] - take[x], x))
+        take[lab] += 1
+
+    picked = [a for lab in LABELS for a in pool[lab][: take[lab]]]
+    rng.shuffle(picked)  # never hand the annotator all the negs in a row
+    return picked
 
 
 def label_session(
