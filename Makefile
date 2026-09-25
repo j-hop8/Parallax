@@ -4,7 +4,8 @@ PSQL := $(DC) exec -T db psql -U parallax -d parallax
 .PHONY: help
 help:
 	@echo "saturation feed-window pressure, ARGS=\"--days 30\" for a longer window"
-	@echo "setup      install deps into .venv via uv"
+	@echo "setup      full workstation: deps + llm + ui extras + dictionary"
+	@echo "setup.crawl  crawl host only: base deps + dictionary, no model or UI"
 	@echo "db.up      start Postgres (docker compose)"
 	@echo "db.migrate apply db/schema.sql (idempotent)"
 	@echo "db.dump    pg_dump -Fc into backups/ (the migration + the daily VPS backup)"
@@ -35,8 +36,19 @@ help:
 	@echo "sched.install  schedule crawl+rollup on this host: launchd on macOS, systemd on Linux"
 	@echo "ops.check  verify the systemd units + the Linux runtime in Docker (no VPS needed)"
 
+# The full workstation: crawl, classify (llm) and the Streamlit page (ui).
+# `nlp` is deliberately NOT here -- it drags in torch, and nothing in the
+# current pipeline uses it.
 .PHONY: setup
 setup: dict
+	uv sync --extra llm --extra ui
+
+# The always-on crawl host (ops/README.md) runs tier 1 and nothing else: no
+# model key lives there, and no page is served from it. Base deps only -- but
+# still the dictionary, because the listing crawl segments every title it
+# stores and a wrong dictionary silently degrades search and dedup.
+.PHONY: setup.crawl
+setup.crawl: dict
 	uv sync
 
 # jieba's PyPI wheel omits the traditional-Chinese dictionary; without it

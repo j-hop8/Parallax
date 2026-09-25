@@ -62,6 +62,11 @@ the full rationale and `Design.pdf` for the target UI.
 
 ```bash
 make setup && make db.up && make db.migrate   # once, on a new machine
+# `setup` installs the llm + ui extras and fetches config/dict.txt.big. Plain
+# `uv run` does neither: it syncs base deps only, so stance fails with
+# "cannot import name 'genai'" and jieba silently falls back to a
+# simplified-Chinese dictionary, degrading search and dedup. The crawl host
+# uses `make setup.crawl` instead -- no model key, no UI.
 make audit                    # probe feeds + robots.txt
 make crawl.one OUTLET=cna     # single adapter
 make crawl                    # all outlets

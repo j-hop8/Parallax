@@ -53,7 +53,7 @@ nano .env
 ## 3. Database and dependencies
 
 ```bash
-make setup                     # fetches config/dict.txt.big, uv sync
+make setup.crawl               # fetches config/dict.txt.big, base deps only
 make db.up db.migrate          # compose Postgres, schema + migrations
 docker compose config | grep -A3 ports   # expect host_ip: 127.0.0.1
 uv run python -m parallax.jobs.crawl_listing --outlet cna --dry-run --wait-network 0
