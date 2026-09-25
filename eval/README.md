@@ -21,9 +21,40 @@ in `note`: Claude had seen Gemini's verdict on them during a smoke test.
 Consequence: a macro-F1 against this set measures **agreement between two
 models**, not human validation. Two LLMs can share blind spots, so treat the
 number as an upper-bound sanity check, not the proposal's milestone. The eval
-report prints the annotator breakdown next to the F1 for this reason. To make
-the milestone claim, a human labels (a sample of) the same rows under a
-different annotator name and the eval is run against those.
+report prints the annotator breakdown next to the F1 for this reason.
+
+### Closing that gap without labeling 300 articles (T-020)
+
+The milestone does not require replacing the machine labels — it requires
+knowing whether they can stand in. Label a **sample that overlaps** them, then
+measure agreement:
+
+```bash
+make label.validate KEYWORD=沈伯洋 ARGS="--n 70 --annotator <you> --seed 1"
+make stance.agreement
+```
+
+`--validate` offers rows another annotator has already labeled, and is exactly
+as blind as a normal session: the existing label is never shown. Both opinions
+land in the CSV — one row per `(article, target, annotator)` — and
+`stance.agreement` reports Cohen's κ for every annotator pair, with no database
+and no API quota.
+
+**κ > 0.60** is the bar (Landis–Koch "substantial"; the same one §9 sets for
+aspect labeling). Clear it and the machine-labeled rows are a defensible proxy,
+so the F1 above them means something. Miss it and you have learned that before
+building anything else on top — which is what §8 asked for in week 2.
+
+Two things about the procedure that are deliberate and should not be "fixed":
+
+- **The sample is stratified proportionally to the existing label
+  distribution**, not evenly across the three classes. κ is prevalence
+  sensitive — expected agreement comes from the marginals — so an evenly
+  sampled overlap reports κ for a corpus that does not exist, and flatters a
+  mostly-neutral set by removing the easy agreements chance would produce.
+- **Once rows overlap, `make stance.eval` refuses to run without
+  `--annotator <name>`.** Scoring both opinions against one model verdict would
+  count those rows twice and quietly weight the validated subset double.
 
 ## The task
 
@@ -179,6 +210,14 @@ On Threads:
 - A post about the target only in passing → `s`, unless the mention itself
   is pointed.
 
+The model gets these same definitions (`POST_SYSTEM_INSTRUCTION` in
+`src/parallax/nlp/stance.py`); change one and change the other, and bump
+`POST_PROMPT_VERSION`. One place they deliberately differ: you can press `s`
+and the model cannot, so where you would skip for missing context it is told
+to answer `neu` and say so in its evidence. Skipped rows are simply absent from
+this file, so they never reach the F1 — but they do still land in the Q4
+panel's denominator as classified posts, which is why the floor exists.
+
 ## Keys
 
 `n` = neg, `e` = neu, `p` = pos, `s` = skip, `o` = print the permalink,
@@ -190,7 +229,11 @@ column after the session, preserving the other columns.
 ```bash
 make social KEYWORD=沈伯洋
 make label.posts KEYWORD=沈伯洋 ARGS="--n 30 --annotator <you> --seed 1"
+make stance.posts KEYWORD=沈伯洋 ARGS=--dry-run   # what the model would cost
 ```
+
+Label before you classify where you can: the tool never shows a model verdict,
+but knowing one exists is its own anchor.
 
 Posts are shuffled across authors, media-only posts are dropped, and previously
 labeled permalink/target pairs are skipped on subsequent runs. The display

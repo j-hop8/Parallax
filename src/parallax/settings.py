@@ -81,3 +81,10 @@ MIN_BASELINE_DAYS = int(os.environ.get("MIN_BASELINE_DAYS", "7"))
 THREADS_ACCESS_TOKEN = os.environ.get("THREADS_ACCESS_TOKEN")
 THREADS_DAILY_QUERY_BUDGET = int(os.environ.get("THREADS_DAILY_QUERY_BUDGET", "1000"))
 THREADS_API_BASE = os.environ.get("THREADS_API_BASE", "https://graph.threads.net/v1.0")
+
+# Q4 platform lean (T-016). Invariant 7's spirit, applied to posts: a neg/neu/pos
+# split over a handful of posts is noise dressed as a measurement, and Threads
+# keyword search returns far fewer posts per incident than the news index does
+# articles. Below this many *classified* posts the panel shows the floor instead
+# of a distribution.
+MIN_PLATFORM_POSTS = int(os.environ.get("MIN_PLATFORM_POSTS", "30"))

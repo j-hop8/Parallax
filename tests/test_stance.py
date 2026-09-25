@@ -254,3 +254,87 @@ def test_importing_the_module_does_not_require_the_llm_extra():
     """The crawler installs without google-genai; this module must import anyway."""
     code = "import sys, parallax.nlp.stance; assert 'google.genai' not in sys.modules"
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+# ---- posts (T-016) ---------------------------------------------------------
+
+
+def _post_row(**over):
+    row = {
+        "id": 7,
+        "platform": "threads",
+        "author": "some_handle",
+        "text": "真是好棒棒，沈伯洋又上電視了",
+    }
+    row.update(over)
+    return row
+
+
+def test_post_stance_input_from_a_db_row():
+    inp = mod.post_stance_input(_post_row(), "沈伯洋")
+    assert (inp.post_id, inp.platform, inp.target) == (7, "threads", "沈伯洋")
+    assert inp.author == "some_handle"
+    assert inp.text == "真是好棒棒，沈伯洋又上電視了"
+
+
+def test_post_text_is_capped_so_one_essay_cannot_drift_the_cost():
+    inp = mod.post_stance_input(_post_row(text="字" * 5000), "沈伯洋")
+    assert len(inp.text) == mod.POST_TEXT_CHARS + 1  # the ellipsis
+    assert inp.text.endswith("…")
+
+
+def test_post_prompt_carries_target_and_text_and_never_the_author():
+    """Same reason the article prompt withholds the outlet: a model that
+    recognises the account can grade the account instead of the post."""
+    prompt = mod.build_post_prompt(mod.post_stance_input(_post_row(), "沈伯洋"))
+    assert "TARGET: 沈伯洋" in prompt
+    assert "真是好棒棒" in prompt
+    assert "some_handle" not in prompt
+    assert "threads" not in prompt.lower()
+
+
+def test_post_prompt_says_none_rather_than_sending_an_empty_section():
+    assert "(none)" in mod.build_post_prompt(mod.post_stance_input(_post_row(text=""), "沈伯洋"))
+
+
+def test_post_system_instruction_names_sarcasm_and_the_three_labels():
+    """Sarcasm is the one thing the article prompt never has to handle and the
+    post prompt always does; the annotation guide names it, so must this."""
+    text = mod.POST_SYSTEM_INSTRUCTION
+    for label in LABELS:
+        assert f"- {label}:" in text
+    assert "Sarcasm" in text
+    assert "JSON only" in text
+    # The post is all there is: no quoted post, no replies, no images.
+    assert "quoted post" in text and "replies" in text
+
+
+def test_post_and_article_prompt_versions_never_collide():
+    """Verdicts from the two prompts sit in different tables but are filtered by
+    version; equal versions would make an article verdict look like a post one."""
+    assert mod.POST_PROMPT_VERSION != PROMPT_VERSION
+    assert mod.POST_PROMPT_VERSION.startswith("post-")
+
+
+def test_post_backend_stamps_the_post_prompt_version():
+    fake = _Fake(['{"label":"neg","confidence":0.8,"evidence":"好棒棒"}'])
+    clf = mod.GeminiPostStance(model="fake-model", rpm=0, client=fake)
+    result = clf.classify(mod.post_stance_input(_post_row(), "沈伯洋"))
+
+    assert (result.label, result.evidence) == ("neg", "好棒棒")
+    assert result.model == "fake-model"
+    assert result.prompt_version == mod.POST_PROMPT_VERSION
+    assert clf.prompt_version == mod.POST_PROMPT_VERSION
+    # Same JSON contract as articles -- one parser, one schema, two prompts.
+    assert fake.calls[0]["config"]["response_json_schema"]["properties"]["label"]["enum"] == list(
+        LABELS
+    )
+
+
+def test_post_backend_rejects_a_label_with_no_evidence_phrase():
+    """Unauditable on a post as much as on an article: nothing is cached, so
+    the post is simply retried next run."""
+    fake = _Fake(['{"label":"neg","confidence":0.8,"evidence":"  "}'])
+    clf = mod.GeminiPostStance(model="m", rpm=0, client=fake)
+    with pytest.raises(ValueError, match="evidence"):
+        clf.classify(mod.post_stance_input(_post_row(), "沈伯洋"))

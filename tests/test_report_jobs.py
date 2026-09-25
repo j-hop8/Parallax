@@ -9,6 +9,7 @@ import pytest
 
 from parallax.jobs.report import main, render
 from parallax.metrics.coverage import DayCoverage, OutletCoverage
+from parallax.metrics.lean import PlatformLean
 from parallax.metrics.originality import OutletOriginality
 from parallax.metrics.propagation import ClusterView, MemberView
 from parallax.metrics.report import IncidentReport, OutletRow
@@ -37,6 +38,10 @@ def _mv(aid, outlet, minutes, rank, added=(), removed=(), summary=None, matched=
         summary,
         matched,
     )
+
+
+def _lean(posts=400, classified=120, neg=70, neu=35, pos=15, reason=None, floor=30):
+    return PlatformLean("threads", posts, classified, neg, neu, pos, floor, reason)
 
 
 def _report(**over) -> IncidentReport:
@@ -101,8 +106,10 @@ def _report(**over) -> IncidentReport:
         "cluster_views": (confident, indeterminate),
         "denominator_as_of": T0,
         "day_shift": 1,
+        "platform_lean": (_lean(),),
         "stance_model": "m",
         "prompt_version": "v1",
+        "post_prompt_version": "post-v1",
     }
     base.update(over)
     return IncidentReport(**base)
@@ -154,3 +161,51 @@ def test_empty_report_is_one_line():
 def test_main_rejects_inverted_window():
     with pytest.raises(SystemExit):
         main(["--keyword", "x", "--since", "2030-01-02", "--until", "2030-01-01"])
+
+
+# ---- Q4 (T-016) ------------------------------------------------------------
+
+
+def _q4(r) -> str:
+    out = render(r)
+    return out[out.index("Q4 社群平台傾向") : out.index("Q3 抄襲與框架差異")]
+
+
+def test_q4_prints_the_split_and_the_lean_when_the_floor_is_cleared():
+    block = _q4(_report())
+    threads = next(line for line in block.splitlines() if line.startswith("threads"))
+    assert "400" in threads and "120" in threads
+    assert "70" in threads and "35" in threads and "15" in threads
+    assert "-0.46" in threads, "lean = (pos - neg) / classified"
+
+
+def test_q4_prints_no_digits_for_the_split_when_suppressed():
+    """Below the floor the counts exist in the report and must not reach the page."""
+    block = _q4(_report(platform_lean=(_lean(posts=40, classified=29, reason="below_floor"),)))
+    threads = next(line for line in block.splitlines() if line.startswith("threads"))
+    assert "below the floor: 29 classified < 30" in threads
+    assert threads.count("—") == 3, "neg/neu/pos are dashes, not counts"
+    for n in ("70", "35", "15"):
+        assert n not in threads
+    assert "40" in threads and "29" in threads, "the honest denominator still prints"
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("no_posts", "no posts matched"),
+        ("unclassified", "no verdicts yet"),
+    ],
+)
+def test_q4_says_which_kind_of_nothing_it_has(reason, expected):
+    block = _q4(_report(platform_lean=(_lean(posts=0, classified=0, reason=reason),)))
+    assert expected in block
+
+
+def test_q4_always_carries_the_unvalidated_caveat_and_the_parked_slot():
+    """Until a human gold set exists the number is a model's opinion; and
+    Facebook is parked, not empty."""
+    block = _q4(_report())
+    assert "model-labeled and unvalidated" in block
+    assert "prompt post-v1" in block
+    assert "facebook" in block and "no compliant read path" in block
