@@ -383,7 +383,8 @@ ops.check:
 		cp /units/* /etc/systemd/system/; \
 		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer; \
 		echo "6 units verified (verify prints nothing when clean)"; \
-		systemd-analyze calendar "*:0/20" "*-*-* 00:20:00 Asia/Taipei" "*-*-* 03:00:00 Asia/Taipei" | grep -E "Normalized|Next elapse"'
+		grep -h "^OnCalendar=" /etc/systemd/system/parallax-*.timer | cut -d= -f2- \
+			| while IFS= read -r c; do systemd-analyze calendar "$$c"; done | grep -E "Normalized|Next elapse"'
 	@echo "-- Linux runtime: uv sync + dry-run crawl of cna (ghcr.io/astral-sh/uv:python3.12-bookworm-slim)"
 	@docker run --rm -v "$(CURDIR):/src:ro" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -euc '\
 		tar -C /src --exclude=.venv --exclude=raw --exclude=logs --exclude=backups --exclude=graphify-out \

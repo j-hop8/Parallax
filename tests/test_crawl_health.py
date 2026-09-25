@@ -297,7 +297,7 @@ def test_one_hanging_outlet_cannot_consume_the_whole_crawl_cycle(monkeypatch):
     """A host that accepts connections then hangs must not starve the others.
 
     中央社 is polled across 11 feeds. Without a budget, timeout x retries per
-    feed can exceed the 20-minute interval on its own, delaying or skipping every
+    feed can exceed the 10-minute interval on its own, delaying or skipping every
     outlet queued behind it -- and tier-1 data missed that way is unrecoverable.
 
     The unreached feeds are reported as errors rather than dropped, so the run is
