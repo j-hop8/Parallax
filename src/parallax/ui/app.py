@@ -91,7 +91,7 @@ def sidebar() -> tuple[str, date | None, date | None]:
                 key="pick",
                 on_change=_pick_target,
             )
-        if status := render.status_strip(load_status()):
+        if status := render.status_strip(load_status(), compact=True):
             st.html(status)
         since = st.date_input("起（台北日，含）", value=None, format="YYYY-MM-DD")
         until = st.date_input("迄（台北日，含）", value=None, format="YYYY-MM-DD")

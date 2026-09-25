@@ -463,7 +463,7 @@ def page(r: IncidentReport, *, social: bool = SOCIAL_ENABLED) -> str:
     )
 
 
-def status_strip(status: dict | None) -> str:
+def status_strip(status: dict | None, *, compact: bool = False) -> str:
     """A compact public progress hint; all timestamps are displayed in Taipei."""
     if status is None:
         return ""
@@ -484,6 +484,8 @@ def status_strip(status: dict | None) -> str:
         f"已分析 {status['keywords']} 個關鍵字",
         f"分母更新 {_hhmm(rollup) if rollup else '從未'}（台北）",
     ]
+    if compact:
+        parts = [parts[1]]
     last_ok = {r["outlet"]: r["last_ok"] for r in health}
     stale = [
         outlet for outlet in status["expected_outlets"]

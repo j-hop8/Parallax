@@ -129,8 +129,11 @@ def test_status_on_landing_and_in_sidebar(app):
     app.run()
     assert _html(app).count('class="px-status small"') == 2
     sidebar_html = "".join(h.proto.body for h in app.sidebar.get("html"))
-    assert "1,234" in sidebar_html and "1 個關鍵字" in sidebar_html
-    assert "0–2 天" in sidebar_html
+    assert "最近爬取" in sidebar_html
+    assert "1,234" not in sidebar_html and "個關鍵字" not in sidebar_html
+    assert "完整日" not in sidebar_html and "分母更新" not in sidebar_html
+    assert "1,234" in _html(app) and "1 個關鍵字" in _html(app)
+    assert "0–2 天" in _html(app)
     app.sidebar.text_input[0].set_value("看護").run()
     assert _html(app).count('class="px-status small"') == 1
 
@@ -154,3 +157,6 @@ def test_status_warns_for_verified_outlets_without_health(app, monkeypatch):
     assert not app.exception
     assert "爬蟲延遲：cna、udn" in _html(app)
     assert "unverified" not in _html(app)
+    sidebar_html = "".join(h.proto.body for h in app.sidebar.get("html"))
+    assert "最近爬取 尚無紀錄" in sidebar_html
+    assert "爬蟲延遲：cna、udn" in sidebar_html
