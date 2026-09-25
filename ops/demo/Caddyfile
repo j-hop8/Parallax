@@ -1,0 +1,14 @@
+# Public demo (T-029). Rendered by `make demo.install` into /etc/caddy/Caddyfile.
+# @@HOST@@ is PARALLAX_PUBLIC_HOST from .env: <ip-with-dashes>.sslip.io until
+# the project has a domain, and moving to one is this line plus a DNS record.
+# Caddy obtains and renews the certificate itself, which is why ports 80 and
+# 443 are open (ops/README.md §10). Streamlit's websocket needs nothing extra.
+@@HOST@@ {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8501
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

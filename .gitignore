@@ -23,6 +23,8 @@ eval/runs/
 
 .DS_Store
 .env
+# parallax_ro URL for the demo page, written by make demo.install (mode 600).
+.env.ui
 
 # 8.2MB jieba traditional dictionary, fetched by `make dict`
 config/dict.txt.big

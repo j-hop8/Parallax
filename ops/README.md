@@ -8,8 +8,13 @@ laptop keeps everything keyword-driven (enrich, dedup, framing, stance, the
 UI) and reaches the database through an SSH tunnel that lands on the same
 `localhost:5433` the code already defaults to. No code changes for the move.
 
-Target: Ubuntu 24.04 LTS, x86_64, 1 vCPU / 1 GB is plenty (the crawl is
-network-bound; Postgres holds ~50 MB). Disk: 10 GB leaves years of headroom.
+Target: Ubuntu 24.04 LTS, x86_64. For tier 1 alone 1 vCPU / 1 GB is plenty
+(the crawl is network-bound; Postgres holds ~50 MB). With the public demo page
+(§10) take **2 GB or more**: the page holds jieba's dictionary (~300 MB RSS
+measured) next to the crawl, which holds its own; 4 GB also leaves room for
+Phase 2's Elasticsearch without moving hosts. Disk: 10 GB leaves years of
+headroom. Pick a provider whose IPv4 stays fixed for the server's life -- the
+demo URL is derived from it.
 
 ## 0. Before you start -- the one irreversible moment
 
@@ -56,12 +61,15 @@ nano .env
 make setup.crawl               # fetches config/dict.txt.big, base deps only
 make db.up db.migrate          # compose Postgres, schema + migrations
 docker compose config | grep -A3 ports   # expect host_ip: 127.0.0.1
-uv run python -m parallax.jobs.crawl_listing --outlet cna --dry-run --wait-network 0
+uv run python -m parallax.jobs.crawl_listing --dry-run --wait-network 0
 ```
 
-Expected from the dry run: one line per feed with item counts, no
-tracebacks. If `items_seen` is 0 for every feed, check outbound DNS/HTTPS
-before going on.
+Expected from the dry run: a line per outlet -- **all eight** -- with item
+counts and no tracebacks. Run every outlet, not one: some sites treat
+datacenter address ranges differently from a home connection, and the time
+to find out is before the laptop crawl stops. If `items_seen` is 0 for every
+feed, check outbound DNS/HTTPS; if it is 0 for one outlet only, that outlet
+is refusing this host -- stop and decide before going on.
 
 ## 4. Rehearse the restore (still nothing stopped on the laptop)
 
@@ -155,6 +163,48 @@ ssh parallax@<vps> make -C parallax health
 - `ls backups/` on the VPS: one dump per day from 03:00 Taipei; older than
   14 days are pruned.
 
+## 10. Public demo page (optional, any time after §7)
+
+The Streamlit page, read-only, at `https://<ip-with-dashes>.sslip.io` -- no
+domain needed; sslip.io resolves the name to the IP inside it, and Caddy gets
+a Let's Encrypt certificate for it. The page runs as its own unit
+(`ops/demo/parallax-ui.service`), never installed by `sched.install`, and is
+built so it cannot hurt the crawl: a 768 MB memory cap, a positive OOM score,
+and the `parallax_ro` database role (read-only transactions, 15 s statement
+timeout, 20 connections at most -- `db/migrations/004`).
+
+```bash
+# Caddy, from its official apt repository (https://caddyserver.com/docs/install#debian-ubuntu-raspbian)
+sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt-get update && sudo apt-get install -y caddy
+
+sudo ufw allow 80,443/tcp      # 80 for the certificate challenge and the https redirect
+
+# the hostname: this server's IPv4 with dashes
+echo "PARALLAX_PUBLIC_HOST=$(curl -4s https://ifconfig.me | tr . -).sslip.io" >> .env
+
+make setup.demo                # the ui extra on top of setup.crawl
+make demo.install              # migrate, rotate the parallax_ro password, unit + Caddyfile, start
+```
+
+Expected: `demo page: https://<host>`. Then:
+
+```bash
+systemctl status parallax-ui --no-pager
+curl -s https://<host>/_stcore/health      # ok
+systemctl show parallax-ui -p MemoryCurrent
+sudo systemctl stop parallax-ui && make health && sudo systemctl start parallax-ui
+```
+
+The last line is the isolation check: with the page stopped, the crawl's
+next slot still runs on time. Run tier 2 from the laptop (§8) on a few
+keywords so the page has something to show; the page itself never writes.
+
+Moving to a real domain later: point an A record at the server, set
+`PARALLAX_PUBLIC_HOST` to it, `make demo.install` again.
+
 ## Operating
 
 | Need | Command (on the VPS) |
@@ -162,11 +212,13 @@ ssh parallax@<vps> make -C parallax health
 | Is tier 1 alive? | `make health` (or from the laptop `ssh parallax@<vps> make -C parallax health`) -- `largest_gap` is the number that matters |
 | Logs | `journalctl -u parallax-crawl -f`, `journalctl -u parallax-rollup -n 50` |
 | Timers | `systemctl list-timers 'parallax-*'` |
-| Deploy a change | `git pull && uv sync` -- timers pick it up on the next run; `make sched.install` again only if a unit file changed |
+| Deploy a change | `git pull && uv sync` -- timers pick it up on the next run; `make sched.install` again only if a unit file changed. **With the demo page (§10):** `git pull && uv sync --extra ui && sudo systemctl restart parallax-ui` -- a bare `uv sync` is exact and removes streamlit |
+| Is the page up? | `systemctl status parallax-ui`, `journalctl -u parallax-ui -n 50`, `journalctl -u caddy -n 50` |
 | Rollup now | `sudo systemctl start parallax-rollup.service` |
 | Restore a backup | §4's drill, against the real project: `make db.restore FILE=…` (destructive: `--clean`) |
 | Postgres shell | `make db.psql` |
-| Stop everything | `make sched.uninstall && make db.down` |
+| Stop the page only | `make demo.uninstall` -- the crawl is untouched; `sudo systemctl stop caddy` closes 443 |
+| Stop everything | `make demo.uninstall; make sched.uninstall && make db.down` |
 
 Things that will bite:
 
