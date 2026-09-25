@@ -22,6 +22,7 @@ help:
 	@echo "label      hand-label a keyword's articles into eval/stance_gold.csv (blind)"
 	@echo "posts.eval   score post stance against the post gold set (ARGS=--classify spends quota)"
 	@echo "stance.eval  score the classifier against the gold set (ARGS=--classify spends quota)"
+	@echo "gold.remap  re-key eval/stance_gold.csv to a rebuilt db by URL (ARGS=--write)"
 	@echo "label.validate  relabel another annotator's rows blind, to measure agreement"
 	@echo "stance.agreement  pairwise annotator kappa; no database, no quota"
 	@echo "dedup      rebuild near-duplicate clusters + propagation order (Q3); ARGS=--keyword X narrows"
@@ -145,6 +146,12 @@ label:
 # T-020. Every gold row in this repo was written by claude-opus-5, so the F1
 # measures two models agreeing. These two close that gap: relabel a stratified
 # sample of someone else's rows blind, then compare with kappa.
+# Re-key the stance gold set after a restore or re-crawl: ids belong to the
+# database, the labelled URL does not. Dry run unless ARGS=--write.
+.PHONY: gold.remap
+gold.remap:
+	uv run python scripts/remap_gold.py $(ARGS)
+
 .PHONY: label.validate
 label.validate:
 	uv run python scripts/label_stance.py --keyword "$(KEYWORD)" --validate $(ARGS)
