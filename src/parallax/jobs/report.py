@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from .. import db
 from ..metrics.lean import PlatformLean
 from ..metrics.report import IncidentReport, OutletRow, build_report
-from ..settings import TIMEZONE
+from ..settings import SOCIAL_ENABLED, TIMEZONE
 
 log = logging.getLogger(__name__)
 
@@ -175,11 +175,13 @@ def render_clusters(r: IncidentReport) -> str:
     return "\n".join(out).rstrip()
 
 
-def render(r: IncidentReport) -> str:
+def render(r: IncidentReport, *, social: bool = SOCIAL_ENABLED) -> str:
     if r.empty:
         return f"no articles match {r.keyword!r}"
     return "\n\n".join(
-        [render_header(r), render_table(r), render_platform_lean(r), render_clusters(r)]
+        [render_header(r), render_table(r)]
+        + ([render_platform_lean(r)] if social else [])
+        + [render_clusters(r)]
     )
 
 

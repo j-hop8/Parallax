@@ -178,7 +178,7 @@ def test_q4_panel_always_carries_the_unvalidated_caveat():
 
 
 def test_q4_panel_is_reachable_from_the_page():
-    out = render.page(_report())
+    out = render.page(_report(), social=True)
     assert "px-q4" in out and "120 / 400 已分類" in out
 
 
@@ -223,3 +223,65 @@ def test_originality_column():
     assert ">100%<" in cna
     udn = out.split("<tr>")[4]
     assert ">67%<" in udn  # (4 alone + 0 first) / 6; the two unresolved credit nobody
+
+
+def test_news_only_default_and_social_output_preserved():
+    import hashlib
+
+    out = render.page(_report())
+    assert "px-q4" not in out and "px-grid" not in out
+    assert render.STANCE_VALIDATION_NOTE in out
+    social = render.page(_report(), social=True)
+    caveat = f'<div class="muted small">{render.STANCE_VALIDATION_NOTE}</div>'
+    assert hashlib.sha256(social.replace(caveat, "").encode()).hexdigest() == (
+        "a9f2640d7f030d67aefc9b529f4a9e1355bc6dd6b082cf94f6f3febacd11fa3c"
+    )
+
+
+@pytest.mark.parametrize("minutes,stale", [(29, False), (30, False), (31, True)])
+def test_status_strip_taipei_freshness_and_escaping(minutes, stale):
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2030, 1, 1, 17, 0, tzinfo=UTC)
+    out = render.status_strip({
+        "extent": {"articles": 1234, "since": now},
+        "expected_outlets": ["<b>中央社</b>"],
+        "health": [{"outlet": '<b>中央社</b>', "last_ok": now - timedelta(minutes=minutes)}],
+        "complete_days": {"cna": 2, "udn": 4},
+        "rollup_as_of": now,
+        "keywords": 3,
+        "now": now,
+    })
+    assert "1,234" in out and "2030-01-02" in out
+    assert f"00:{60 - minutes:02}" in out
+    assert "2–4 天" in out and "3 個關鍵字" in out
+    assert ("爬蟲延遲" in out) is stale
+    if stale:
+        assert "&lt;b&gt;中央社&lt;/b&gt;" in out and "<b>中央社" not in out
+    assert render.status_strip(None) == ""
+
+
+def test_status_strip_empty_index():
+    from datetime import datetime
+
+    out = render.status_strip({
+        "extent": {"articles": 0, "since": None}, "health": [], "expected_outlets": [],
+        "complete_days": {}, "rollup_as_of": None, "keywords": 0,
+        "now": datetime.now(render.TZ),
+    })
+    assert "尚無資料" in out and "尚無紀錄" in out and "0 天" in out
+
+
+@pytest.mark.parametrize("present", [False, True])
+def test_status_strip_flags_expected_outlets_missing_from_health(present):
+    from datetime import datetime
+
+    now = datetime.now(render.TZ)
+    out = render.status_strip({
+        "extent": {"articles": 0, "since": None},
+        "expected_outlets": ["cna", "udn"],
+        "health": [{"outlet": "cna", "last_ok": now}] if present else [],
+        "complete_days": {}, "rollup_as_of": None, "keywords": 0, "now": now,
+    })
+    warning = "爬蟲延遲：udn" if present else "爬蟲延遲：cna、udn"
+    assert f"<strong>{warning}</strong>" in out

@@ -978,3 +978,33 @@ def article_ids_by_canonical(
             (outlets, canons),
         )
         return {(r["outlet"], r["url_canonical"]): r["id"] for r in cur.fetchall()}
+
+
+def crawl_health(conn: psycopg.Connection) -> list[dict]:
+    """Successful crawl runs in the last 24h, as in make health.
+
+    Keep last_ok as a timestamp so the presentation can assess freshness.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH r AS (
+                SELECT outlet, started_at,
+                       started_at - lag(started_at) OVER (
+                           PARTITION BY outlet ORDER BY started_at
+                       ) AS gap
+                FROM crawl_runs WHERE ok AND started_at > now() - interval '24 hours'
+            )
+            SELECT outlet, max(started_at) AS last_ok, count(*) AS ok_runs,
+                   coalesce(max(gap), interval '0') AS largest_gap
+            FROM r GROUP BY outlet ORDER BY largest_gap DESC NULLS LAST
+            """
+        )
+        return cur.fetchall()
+
+
+def index_extent(conn: psycopg.Connection) -> dict:
+    """Size and earliest effective timestamp of the article index."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) AS articles, min(effective_at) AS since FROM article_index")
+        return cur.fetchone()

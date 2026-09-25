@@ -28,13 +28,17 @@ from zoneinfo import ZoneInfo
 from ..metrics.lean import PlatformLean
 from ..metrics.propagation import ClusterView, MemberView
 from ..metrics.report import IncidentReport, OutletRow
-from ..settings import TIMEZONE
+from ..settings import SOCIAL_ENABLED, TIMEZONE
 
 TZ = ZoneInfo(TIMEZONE)
 
 CORE_CHARS = 120
 
 STANCE_NOTE = "立場分數來自「目標依存情緒分析」，判斷對事件當事人的態度，而非文句整體語氣。"
+
+STANCE_VALIDATION_NOTE = (
+    "文章立場目前由模型標註，評估用的黃金標準亦為模型標註，尚待人工驗證；請視為訊號而非量測值。"
+)
 
 # The Q4 counterpart of STANCE_NOTE, plus the thing the article note does not
 # have to say: article stance has a gold set, post stance has none yet. This
@@ -62,6 +66,10 @@ color:var(--ink);max-width:1080px;margin:0 auto;line-height:1.45}
 .px .mono{font-family:"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
 .px .muted{color:var(--muted)}
 .px .small{font-size:12px}
+.px-status{color:var(--muted);font-size:12px;margin-top:12px;
+border-top:1px solid var(--line);padding-top:8px}
+.px-status strong{color:var(--neg)}
+.px.px-status-compact{width:100%;max-width:none;margin:0}
 .px-wordmark{display:flex;justify-content:space-between;align-items:baseline;
 border-bottom:1px solid var(--line);padding:6px 0 14px;margin-bottom:28px}
 .px-wordmark .brand{font-family:Georgia,"Noto Serif TC","Songti TC",serif;font-size:26px;
@@ -277,6 +285,7 @@ def table(r: IncidentReport) -> str:
         f'<div class="muted small" style="margin-top:10px">{STANCE_NOTE}'
         " 涵蓋權重只在抓取完整且總量足夠的日子計算，並依報告內最大值定比例尺；"
         "原創率下方為嚴格定義（不屬於任何抄襲群）。</div>"
+        f'<div class="muted small">{esc(STANCE_VALIDATION_NOTE)}</div>'
         "</div>"
     )
 
@@ -443,13 +452,52 @@ def footer(r: IncidentReport) -> str:
     )
 
 
-def page(r: IncidentReport) -> str:
+def page(r: IncidentReport, *, social: bool = SOCIAL_ENABLED) -> str:
     if r.empty:
         return empty(r.keyword)
+    content = (
+        f'<div class="px-grid"><div>{table(r)}</div><div>{q4(r)}</div></div>'
+        if social else table(r)
+    )
     return (
         '<div class="px">'
-        f"{header(r)}"
-        f'<div class="px-grid"><div>{table(r)}</div><div>{q4(r)}</div></div>'
+        f"{header(r)}{content}"
         f"{clusters(r)}{footer(r)}"
         "</div>"
     )
+
+
+def status_strip(status: dict | None, *, compact: bool = False) -> str:
+    """A compact public progress hint; all timestamps are displayed in Taipei."""
+    if status is None:
+        return ""
+    extent = status["extent"]
+    since = extent["since"]
+    since_label = since.astimezone(TZ).strftime("%Y-%m-%d") if since else "尚無資料"
+    health = status["health"]
+    last = max((r["last_ok"] for r in health if r["last_ok"]), default=None)
+    days = list(status["complete_days"].values())
+    day_label = str(min(days)) if days and min(days) == max(days) else (
+        f"{min(days)}–{max(days)}" if days else "0"
+    )
+    rollup = status["rollup_as_of"]
+    parts = [
+        f"已索引 {extent['articles']:,} 篇 · 自 {since_label}",
+        f"最近爬取 {_hhmm(last) if last else '尚無紀錄'}（台北）",
+        f"每家媒體完整日 {day_label} 天",
+        f"已分析 {status['keywords']} 個關鍵字",
+        f"分母更新 {_hhmm(rollup) if rollup else '從未'}（台北）",
+    ]
+    if compact:
+        parts = [parts[1]]
+    last_ok = {r["outlet"]: r["last_ok"] for r in health}
+    stale = [
+        outlet for outlet in status["expected_outlets"]
+        if last_ok.get(outlet) is None
+        or status["now"] - last_ok[outlet] > timedelta(minutes=30)
+    ]
+    body = esc(" · ".join(parts))
+    if stale:
+        body += f" · <strong>{esc('爬蟲延遲：' + '、'.join(stale))}</strong>"
+    wrapper = "px px-status-compact" if compact else "px"
+    return f'<div class="{esc(wrapper)}"><div class="px-status small">{body}</div></div>'
