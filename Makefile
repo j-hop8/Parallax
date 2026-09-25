@@ -1,9 +1,10 @@
 DC := docker compose
 PSQL := $(DC) exec -T db psql -U parallax -d parallax
 
-.PHONY: social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval label label.validate stance.agreement dedup label.pairs dedup.eval framing report ui
+.PHONY: saturation social threads.refresh sched.install sched.uninstall sched.install.launchd sched.install.systemd sched.uninstall.launchd sched.uninstall.systemd db.dump db.restore ops.check help setup db.up db.down db.migrate db.psql db.wait audit crawl crawl.one rollup health test lint enrich reextract stance stance.posts stance.eval label label.validate stance.agreement dedup label.pairs dedup.eval framing report ui
 
 help:
+	@echo "saturation feed-window pressure, ARGS=\"--days 30\" for a longer window"
 	@echo "setup      install deps into .venv via uv"
 	@echo "db.up      start Postgres (docker compose)"
 	@echo "db.migrate apply db/schema.sql (idempotent)"
@@ -338,3 +339,7 @@ test:
 
 lint:
 	uv run ruff check src tests scripts
+
+# Read-only feed-window pressure report.
+saturation:
+	uv run python -m parallax.jobs.saturation $(ARGS)
