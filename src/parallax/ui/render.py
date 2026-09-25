@@ -484,9 +484,11 @@ def status_strip(status: dict | None) -> str:
         f"已分析 {status['keywords']} 個關鍵字",
         f"分母更新 {_hhmm(rollup) if rollup else '從未'}（台北）",
     ]
+    last_ok = {r["outlet"]: r["last_ok"] for r in health}
     stale = [
-        r["outlet"] for r in health
-        if r["last_ok"] is None or status["now"] - r["last_ok"] > timedelta(minutes=30)
+        outlet for outlet in status["expected_outlets"]
+        if last_ok.get(outlet) is None
+        or status["now"] - last_ok[outlet] > timedelta(minutes=30)
     ]
     body = esc(" · ".join(parts))
     if stale:

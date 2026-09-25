@@ -16,7 +16,7 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from parallax import db
+from parallax import config, db
 from parallax.metrics.report import IncidentReport, build_report
 from parallax.nlp.stance import PROMPT_VERSION
 from parallax.settings import STANCE_MODEL
@@ -52,7 +52,9 @@ def load_status() -> dict | None:
             extent = db.index_extent(conn)
             totals = db.complete_day_totals(conn)
             rollup = db.rollup_as_of(conn)
+        _, outlets = config.load_outlets()
         return {
+            "expected_outlets": [o.code for o in outlets if o.verified],
             "health": health,
             "extent": extent,
             "complete_days": {

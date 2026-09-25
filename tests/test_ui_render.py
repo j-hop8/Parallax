@@ -245,6 +245,7 @@ def test_status_strip_taipei_freshness_and_escaping(minutes, stale):
     now = datetime(2030, 1, 1, 17, 0, tzinfo=UTC)
     out = render.status_strip({
         "extent": {"articles": 1234, "since": now},
+        "expected_outlets": ["<b>中央社</b>"],
         "health": [{"outlet": '<b>中央社</b>', "last_ok": now - timedelta(minutes=minutes)}],
         "complete_days": {"cna": 2, "udn": 4},
         "rollup_as_of": now,
@@ -264,8 +265,23 @@ def test_status_strip_empty_index():
     from datetime import datetime
 
     out = render.status_strip({
-        "extent": {"articles": 0, "since": None}, "health": [],
+        "extent": {"articles": 0, "since": None}, "health": [], "expected_outlets": [],
         "complete_days": {}, "rollup_as_of": None, "keywords": 0,
         "now": datetime.now(render.TZ),
     })
     assert "尚無資料" in out and "尚無紀錄" in out and "0 天" in out
+
+
+@pytest.mark.parametrize("present", [False, True])
+def test_status_strip_flags_expected_outlets_missing_from_health(present):
+    from datetime import datetime
+
+    now = datetime.now(render.TZ)
+    out = render.status_strip({
+        "extent": {"articles": 0, "since": None},
+        "expected_outlets": ["cna", "udn"],
+        "health": [{"outlet": "cna", "last_ok": now}] if present else [],
+        "complete_days": {}, "rollup_as_of": None, "keywords": 0, "now": now,
+    })
+    warning = "爬蟲延遲：udn" if present else "爬蟲延遲：cna、udn"
+    assert f"<strong>{warning}</strong>" in out

@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 from datetime import UTC, date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,7 +14,7 @@ st = pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest
 
 import parallax.metrics.report as report_mod
-from parallax import db
+from parallax import config, db
 from tests.test_report_jobs import _report
 
 # AppTest resolves a relative path against this file, not the cwd.
@@ -33,6 +34,11 @@ def app(monkeypatch):
         calls.append((keyword, since, until))
         return _report(keyword=keyword, since=since, until=until)
 
+    monkeypatch.setattr(config, "load_outlets", lambda: ({}, [
+        SimpleNamespace(code="cna", verified=True),
+        SimpleNamespace(code="udn", verified=True),
+        SimpleNamespace(code="unverified", verified=False),
+    ]))
     monkeypatch.setattr(db, "connect", fake_connect)
     monkeypatch.setattr(db, "stance_targets", lambda conn, m, p: [{"target": "看護", "n": 12}])
     now = datetime.now(UTC)
@@ -140,3 +146,11 @@ def test_status_failure_is_quiet(app, monkeypatch, query):
     assert "輸入事件關鍵字" in _html(app)
     assert "px-status" not in _html(app)
     assert "private database address" not in _html(app)
+
+
+def test_status_warns_for_verified_outlets_without_health(app, monkeypatch):
+    monkeypatch.setattr(db, "crawl_health", lambda conn: [])
+    app.run()
+    assert not app.exception
+    assert "爬蟲延遲：cna、udn" in _html(app)
+    assert "unverified" not in _html(app)
