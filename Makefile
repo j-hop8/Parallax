@@ -364,7 +364,7 @@ demo.install: db.migrate
 	PW=$$(openssl rand -hex 24); \
 	printf "ALTER ROLE parallax_ro PASSWORD '%s';\n" "$$PW" | $(PSQL) -v ON_ERROR_STOP=1 -q || exit 1; \
 	( umask 077; printf 'PARALLAX_DATABASE_URL=postgresql://parallax_ro:%s@127.0.0.1:%s/parallax\n' \
-		"$$PW" "$${PARALLAX_DB_PORT:-5433}" > .env.ui ); \
+		"$$PW" "$${PARALLAX_DB_PORT:-5433}" > .env.ui ) || exit 1; \
 	sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" -e "s#@@USER@@#$$(id -un)#g" \
 		ops/demo/$(DEMO_UNIT) | sudo tee $(SYSTEMD_DIR)/$(DEMO_UNIT) >/dev/null || exit 1; \
 	sed -e "s#@@HOST@@#$$HOST#g" ops/demo/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null || exit 1; \
