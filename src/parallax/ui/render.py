@@ -66,6 +66,10 @@ color:var(--ink);max-width:1080px;margin:0 auto;line-height:1.45}
 .px .mono{font-family:"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
 .px .muted{color:var(--muted)}
 .px .small{font-size:12px}
+.px-status{color:var(--muted);font-size:12px;margin-top:12px;
+border-top:1px solid var(--line);padding-top:8px}
+.px-status strong{color:var(--neg)}
+.px.px-status-compact{width:100%;max-width:none;margin:0}
 .px-wordmark{display:flex;justify-content:space-between;align-items:baseline;
 border-bottom:1px solid var(--line);padding:6px 0 14px;margin-bottom:28px}
 .px-wordmark .brand{font-family:Georgia,"Noto Serif TC","Songti TC",serif;font-size:26px;
@@ -495,4 +499,5 @@ def status_strip(status: dict | None, *, compact: bool = False) -> str:
     body = esc(" · ".join(parts))
     if stale:
         body += f" · <strong>{esc('爬蟲延遲：' + '、'.join(stale))}</strong>"
-    return f'<div class="px"><div class="px-status small">{body}</div></div>'
+    wrapper = "px px-status-compact" if compact else "px"
+    return f'<div class="{esc(wrapper)}"><div class="px-status small">{body}</div></div>'

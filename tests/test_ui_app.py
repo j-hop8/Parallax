@@ -147,7 +147,7 @@ def test_status_failure_is_quiet(app, monkeypatch, query):
     app.run()
     assert not app.exception and not app.error
     assert "輸入事件關鍵字" in _html(app)
-    assert "px-status" not in _html(app)
+    assert 'class="px-status small"' not in _html(app)
     assert "private database address" not in _html(app)
 
 
