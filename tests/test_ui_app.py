@@ -4,7 +4,7 @@ shows before a keyword, what it does with one, and how a failure surfaces."""
 from __future__ import annotations
 
 import contextlib
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
@@ -35,6 +35,14 @@ def app(monkeypatch):
 
     monkeypatch.setattr(db, "connect", fake_connect)
     monkeypatch.setattr(db, "stance_targets", lambda conn, m, p: [{"target": "看護", "n": 12}])
+    now = datetime.now(UTC)
+    monkeypatch.setattr(db, "crawl_health", lambda conn: [
+        {"outlet": "cna", "last_ok": now, "ok_runs": 12, "largest_gap": None},
+        {"outlet": "udn", "last_ok": now, "ok_runs": 12, "largest_gap": None},
+    ])
+    monkeypatch.setattr(db, "index_extent", lambda conn: {"articles": 1234, "since": now})
+    monkeypatch.setattr(db, "complete_day_totals", lambda conn: {"cna": [100, 200]})
+    monkeypatch.setattr(db, "rollup_as_of", lambda conn: now)
     monkeypatch.setattr(report_mod, "build_report", fake_build)
     st.cache_data.clear()
     at = AppTest.from_file(APP, default_timeout=30)
@@ -92,7 +100,9 @@ def test_build_failure_is_an_error_box(app, monkeypatch):
     app.run()
     app.sidebar.text_input[0].set_value("看護").run()
     assert not app.exception
-    assert [e.value for e in app.error] == ["無法產生報告：connection refused"]
+    assert [e.value for e in app.error] == ["無法產生報告，請稍後再試。"]
+    assert "connection refused" not in str(app)
+    assert "connection refused" not in _html(app)
     assert '<div class="px-section">' not in _html(app)
 
 
@@ -107,3 +117,26 @@ def test_empty_report_is_a_message(app, monkeypatch):
     app.run()
     app.sidebar.text_input[0].set_value("不存在的字").run()
     assert "找不到含「不存在的字」的標題" in _html(app)
+
+
+def test_status_on_landing_and_in_sidebar(app):
+    app.run()
+    assert _html(app).count('class="px-status small"') == 2
+    sidebar_html = "".join(h.proto.body for h in app.sidebar.get("html"))
+    assert "1,234" in sidebar_html and "1 個關鍵字" in sidebar_html
+    assert "0–2 天" in sidebar_html
+    app.sidebar.text_input[0].set_value("看護").run()
+    assert _html(app).count('class="px-status small"') == 1
+
+
+@pytest.mark.parametrize("query", ["crawl_health", "index_extent", "complete_day_totals", "rollup_as_of"])
+def test_status_failure_is_quiet(app, monkeypatch, query):
+    def boom(conn):
+        raise RuntimeError("private database address")
+
+    monkeypatch.setattr(db, query, boom)
+    app.run()
+    assert not app.exception and not app.error
+    assert "輸入事件關鍵字" in _html(app)
+    assert "px-status" not in _html(app)
+    assert "private database address" not in _html(app)

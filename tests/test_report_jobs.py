@@ -167,7 +167,7 @@ def test_main_rejects_inverted_window():
 
 
 def _q4(r) -> str:
-    out = render(r)
+    out = render(r, social=True)
     return out[out.index("Q4 社群平台傾向") : out.index("Q3 抄襲與框架差異")]
 
 
@@ -209,3 +209,12 @@ def test_q4_always_carries_the_unvalidated_caveat_and_the_parked_slot():
     assert "model-labeled and unvalidated" in block
     assert "prompt post-v1" in block
     assert "facebook" in block and "no compliant read path" in block
+
+
+def test_social_gate_preserves_enabled_text():
+    import hashlib
+
+    assert "Q4 社群平台傾向" not in render(_report())
+    assert hashlib.sha256(render(_report(), social=True).encode()).hexdigest() == (
+        "cfd24027d56df2eb498c5bbb63c22dc1da0a3fe212a9c93dce322cc615806282"
+    )

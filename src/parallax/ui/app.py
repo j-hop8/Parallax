@@ -11,7 +11,8 @@ as a script, where relative imports have no package to resolve against.
 
 from __future__ import annotations
 
-from datetime import date
+import logging
+from datetime import date, datetime
 
 import streamlit as st
 
@@ -42,6 +43,30 @@ def load_targets() -> list[tuple[str, int]]:
     return [(r["target"], r["n"]) for r in rows]
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def load_status() -> dict | None:
+    """Status is a hint: a failed query must not prevent using the page."""
+    try:
+        with db.connect() as conn:
+            health = db.crawl_health(conn)
+            extent = db.index_extent(conn)
+            totals = db.complete_day_totals(conn)
+            rollup = db.rollup_as_of(conn)
+        return {
+            "health": health,
+            "extent": extent,
+            "complete_days": {
+                outlet: len(totals.get(outlet, []))
+                for outlet in totals.keys() | {row["outlet"] for row in health}
+            },
+            "rollup_as_of": rollup,
+            "keywords": len(load_targets()),
+            "now": datetime.now(render.TZ),
+        }
+    except Exception:  # noqa: BLE001 -- status must fail quietly
+        return None
+
+
 def _pick_target() -> None:
     """Copy the clicked pill into the keyword box, then clear the pill: a
     single-select pill that stays lit toggles *off* on its next click, which
@@ -64,6 +89,8 @@ def sidebar() -> tuple[str, date | None, date | None]:
                 key="pick",
                 on_change=_pick_target,
             )
+        if status := render.status_strip(load_status()):
+            st.html(status)
         since = st.date_input("起（台北日，含）", value=None, format="YYYY-MM-DD")
         until = st.date_input("迄（台北日，含）", value=None, format="YYYY-MM-DD")
         if st.button("重新整理", help=f"報告快取 {CACHE_TTL // 60} 分鐘；分母由 make rollup 更新"):
@@ -80,14 +107,17 @@ def main() -> None:
     keyword, since, until = sidebar()
     if not keyword:
         st.html(render.prompt())
+        if status := render.status_strip(load_status()):
+            st.html(status)
         return
     if since and until and since > until:
         st.error("「起」在「迄」之後。")
         return
     try:
         report = load_report(keyword, since, until)
-    except Exception as e:  # noqa: BLE001 -- the page must say why, not trace back
-        st.error(f"無法產生報告：{e}")
+    except Exception:
+        logging.exception("Unable to build incident report")  # noqa: LOG015 -- script entry point
+        st.error("無法產生報告，請稍後再試。")
         return
     st.html(render.page(report))
 
