@@ -1,0 +1,34 @@
+# Public demo page (T-029): the Streamlit UI, on loopback, behind Caddy.
+# Rendered by `make demo.install` with the same @@ROOT@@/@@UV@@/@@USER@@
+# substitution as ops/systemd/*. It lives outside ops/systemd/ on purpose:
+# `make sched.install` installs every unit in there, and scheduling the crawl
+# must never put a web server on the host as a side effect.
+#
+# This page shares a host with tier 1, whose uptime is invariant 1. So it is
+# the process the kernel gives up first -- a memory cap, a positive OOM score,
+# a lower CPU priority -- and it reads Postgres as parallax_ro
+# (db/migrations/004): read-only, statement_timeout, connection limit.
+[Unit]
+Description=Parallax public demo page (Streamlit on 127.0.0.1:8501)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@@USER@@
+WorkingDirectory=@@ROOT@@
+# PARALLAX_DATABASE_URL as parallax_ro, written by demo.install (mode 600). An
+# exported variable wins over .env -- settings._load_dotenv never overrides --
+# so this process never sees the owner URL the crawl uses.
+EnvironmentFile=@@ROOT@@/.env.ui
+ExecStart=@@UV@@ run --extra ui streamlit run src/parallax/ui/app.py --server.address=127.0.0.1 --server.port=8501
+Restart=always
+RestartSec=5
+MemoryMax=768M
+OOMScoreAdjust=500
+Nice=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
