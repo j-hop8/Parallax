@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Tier-1 listing crawl, every 20 minutes.
+  Tier-1 listing crawl, every 10 minutes.
+
+  10 minutes, not 20, because `make saturation` measured udn replacing 80.8% of
+  its feed window inside a single 20-minute cycle (fastest full turnover 13.6
+  min; ftv 14.3). At 20 minutes we were losing udn articles on ordinary days,
+  which undercounts its Q2 denominator and therefore inflates its coverage
+  weight. Re-measure with `make saturation` before changing this again.
 
   launchd rather than cron for one specific reason: when a StartInterval job is
   missed because the machine was asleep, launchd runs it immediately on wake.
@@ -24,7 +30,7 @@
     </array>
 
     <key>StartInterval</key>
-    <integer>1200</integer>
+    <integer>600</integer>
 
     <!-- Catch up as soon as the agent loads, e.g. after a reboot. -->
     <key>RunAtLoad</key>

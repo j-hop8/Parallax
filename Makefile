@@ -231,7 +231,7 @@ health:
 	       count(*) AS ok_runs, \
 	       coalesce(max(gap), interval '0') AS largest_gap \
 	FROM r GROUP BY outlet ORDER BY largest_gap DESC NULLS LAST;"
-	@echo "-- largest_gap is the number that matters: the crawl runs every 20 min, so"
+	@echo "-- largest_gap is the number that matters: the crawl runs every 10 min, so"
 	@echo "-- anything past ~1h is coverage this project can never get back."
 	@$(PSQL) -tc "SELECT count(*) FILTER (WHERE NOT ok) || ' failed runs in 24h' FROM crawl_runs WHERE started_at > now() - interval '24 hours';"
 	@uv run python -m parallax.jobs.social --status
@@ -383,7 +383,8 @@ ops.check:
 		cp /units/* /etc/systemd/system/; \
 		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer; \
 		echo "6 units verified (verify prints nothing when clean)"; \
-		systemd-analyze calendar "*:0/20" "*-*-* 00:20:00 Asia/Taipei" "*-*-* 03:00:00 Asia/Taipei" | grep -E "Normalized|Next elapse"'
+		grep -h "^OnCalendar=" /etc/systemd/system/parallax-*.timer | cut -d= -f2- \
+			| while IFS= read -r c; do systemd-analyze calendar "$$c"; done | grep -E "Normalized|Next elapse"'
 	@echo "-- Linux runtime: uv sync + dry-run crawl of cna (ghcr.io/astral-sh/uv:python3.12-bookworm-slim)"
 	@docker run --rm -v "$(CURDIR):/src:ro" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -euc '\
 		tar -C /src --exclude=.venv --exclude=raw --exclude=logs --exclude=backups --exclude=graphify-out \
