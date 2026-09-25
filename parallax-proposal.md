@@ -8,12 +8,12 @@
 
 ## 1. Summary
 
-Parallax is a keyword-driven system that ingests the full daily output of Taiwanese news outlets alongside social media discussion, then answers four questions about any incident:
+Parallax is a keyword-driven system that ingests the full daily output of Taiwanese news outlets, then answers three questions about any incident — and, from version 2.0.0, a fourth about social media discussion:
 
 1. Which outlets lean positive or negative on it
 2. How much of each outlet's daily output it consumed
 3. Which outlets are copying each other, and what each one added or removed
-4. Whether each social platform leans positive or negative
+4. *(v2.0.0)* Whether each social platform leans positive or negative
 
 The name comes from astronomy: parallax is the apparent shift in an object's position depending on where the observer stands, and the size of that shift is how distance gets calculated. The project treats media bias the same way — not asserted, but measured as the divergence between outlets reporting the same event.
 
@@ -39,7 +39,7 @@ Media monitoring tools report sentiment as a single aggregate number per topic. 
 | Originality rate | Articles not in a near-duplicate cluster ÷ total | Independent reporting volume |
 | Propagation order | Publish-time rank within a duplicate cluster | Who originates, who follows |
 | Framing delta | Text present in one cluster member but absent from the shared core | Editorial choice, made visible |
-| Platform lean | Sentiment distribution per social platform | Public reaction by venue |
+| Platform lean *(v2.0.0)* | Sentiment distribution per social platform | Public reaction by venue |
 
 ---
 
@@ -83,13 +83,14 @@ Included:
 
 Displayed in phase 1: **raw article counts**, with per-outlet baseline normalization once roughly 10 days of listing data exist. True same-day percentages switch on around week 4 and apply retroactively, because the log will already be there.
 
-Deferred: social media, aspect taxonomy, Google Trends, Kafka, Airflow, LangChain, regional map.
+Deferred: social media (now version 2.0.0, below), aspect taxonomy, Google Trends, Kafka, Airflow, LangChain, regional map.
 
 **Exit criterion:** typing a keyword returns outlet stance, coverage counts, and at least one correctly identified copy cluster with a readable diff.
 
 ### Phase 2 — Analytical depth (weeks 5–8)
 
-- Threads ingestion via the official keyword-search API, enabling question 4 for one platform. Decision 2026-09-20: PTT and Dcard were dropped — both are losing users while Taiwanese political discussion has moved to Threads — and Facebook is **parked**: there is no read path that respects this project's crawling conduct (CrowdTangle closed Aug 2024, Meta Content Library is application-gated to institutional researchers, Page Public Content Access needs business verification). The Q4 panel keeps a Facebook slot so the design does not change if a compliant path opens.
+Phases 2 and 3 are **news only** (decision 2026-09-25). Social media moved to its own release, version 2.0.0, below.
+
 - Aspect taxonomy: BERTopic for discovery, hand-curated to 5–8 labels, LLM for consistent labeling
 - LangChain for the labeling layer — response caching, Pydantic-validated structured output, async batching
 - Elasticsearch replaces Postgres full-text as the query layer
@@ -102,6 +103,14 @@ Deferred: social media, aspect taxonomy, Google Trends, Kafka, Airflow, LangChai
 - Influence scoring derived from propagation order plus downstream volume response
 - Regional aspect-interest map from Trends county-level data
 - React frontend replacing Streamlit
+
+### Version 2.0.0 — Social platforms (question 4)
+
+Question 4 was built first as part of Phase 2 (T-014 to T-021): Threads ingestion via the official keyword-search API, target-dependent post stance, the platform-lean panel and its evaluation harness. On 2026-09-25 it was split out into its own release, because the Threads API read path is currently broken and `social_posts` holds nothing to show.
+
+- **What stays:** the code (`src/parallax/social/`, `jobs/social.py`, `jobs/stance_social.py`, `metrics/lean.py`), the `social_*` tables and every test. The page and the text report hide Q4 unless `PARALLAX_SOCIAL=1`, so the news-only line never shows an empty panel and re-enabling needs no redeploy.
+- **Platforms, decided 2026-09-20:** PTT and Dcard were dropped — both are losing users while Taiwanese political discussion has moved to Threads — and Facebook is **parked**: there is no read path that respects this project's crawling conduct (CrowdTangle closed Aug 2024, Meta Content Library is application-gated to institutional researchers, Page Public Content Access needs business verification). The Q4 panel keeps a Facebook slot so the design does not change if a compliant path opens.
+- **Open work, in `.agents/tickets/v2.0.0/`:** restore the Threads read path; T-023 (annotator-aware post stance validation); at least 100 human-labeled post rows before the panel's "model-labeled, unvalidated" caveat can retire.
 
 ---
 
@@ -201,7 +210,7 @@ Hand-labeling is unavoidable and should be budgeted as real work — roughly two
 | 2 | Sentiment approach validated on hand-labeled sample |
 | 3 | SimHash clustering + diff working; originality rate computable |
 | 4 | Streamlit UI answering questions 1–3; counts switch to true percentages — **MVP complete** |
-| 6 | Threads ingested; question 4 answered for one platform (Facebook parked) |
+| 6 | Tier 1 on an always-on host; public news-only demo (questions 1–3). Threads / question 4 moved to v2.0.0 |
 | 8 | Aspect taxonomy live; Elasticsearch query layer |
 | 10 | Kafka and Airflow in place; influence scoring |
 | 12 | React frontend; evaluation results written up |

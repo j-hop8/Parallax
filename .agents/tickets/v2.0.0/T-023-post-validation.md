@@ -1,5 +1,8 @@
 # T-023 — Post stance validation: mirror T-020 for Threads posts
 
+> **Parked 2026-09-25 (T-031):** social media / Q4 moved to version 2.0.0.
+> Do not delegate until 2.0.0 work resumes and the Threads read path works.
+
 **Owner:** codex (delegable — T-020 is the worked example line for line, and the
 κ arithmetic is already written and tested; this ticket is the posts-side
 plumbing around it). **Blocked by:** #26 (T-020) and #25 (T-021) both merged to

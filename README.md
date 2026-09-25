@@ -9,7 +9,7 @@ CI runs Ruff lint and the full test suite (including Postgres and UI tests) on e
 make setup && make db.up && make db.migrate   # once
 make crawl && make rollup                      # tier 1 + the denominator
 make enrich KEYWORD=沈伯洋 && make dedup && make framing && make stance KEYWORD=沈伯洋
-make social KEYWORD=沈伯洋                     # Threads public posts (approved token required)
+make social KEYWORD=沈伯洋                     # v2.0.0: Threads posts (API currently broken; Q4 hidden unless PARALLAX_SOCIAL=1)
 make report KEYWORD=沈伯洋                     # Q1–Q3 as text
 make ui                                        # the same page at http://localhost:8501
 ```
