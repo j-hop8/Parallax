@@ -72,6 +72,20 @@ of this one.
 `ops/README.md`, `src/parallax/crawl/listing.py`,
 `src/parallax/jobs/rollup_daily.py` that stated "every 20 minutes".
 
+Added after the first push (the same 20 -> 10 sweep, found on the way to the
+VPS cutover; the Codex review on #33 asked for them to be listed):
+
+- `ops/systemd/parallax-crawl.service` -- its comment still promised "under
+  the 20-minute interval", and `TimeoutStartSec=19min` let a hung run swallow
+  one or two 10-minute slots. `9min` sits above the 534s worst case and below
+  the slot.
+- `Makefile` `ops.check` recipe -- it validated a hard-coded `*:0/20`, i.e. a
+  schedule no unit uses any more, while this ticket's acceptance relies on
+  `make ops.check` verifying the units. It now reads `OnCalendar=` from the
+  rendered timers, so it cannot drift again.
+- `tests/test_crawl_health.py` -- one docstring said "the 20-minute interval".
+- this ticket file.
+
 ## Acceptance criteria
 
 - launchd and systemd both say 10 minutes; neither is left behind.
