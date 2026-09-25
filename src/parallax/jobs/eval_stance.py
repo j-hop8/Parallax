@@ -21,7 +21,7 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 from .. import db
-from ..nlp.eval import LABELS, accuracy, confusion, macro_f1, per_class
+from ..nlp.eval import LABELS, accuracy, agreement, confusion, macro_f1, per_class
 from ..nlp.gold import GOLD_PATH, GoldRow, load_gold
 from ..nlp.stance import (
     PROMPT_VERSION,
@@ -128,6 +128,75 @@ def render(report: dict, *, model: str, prompt_version: str) -> str:
     return "\n".join(lines)
 
 
+KAPPA_TARGET = 0.60  # Landis-Koch "substantial"; proposal section 9 sets it for aspect
+
+
+def duplicate_keys(gold: list[GoldRow]) -> dict[tuple[int, str], list[str]]:
+    """(article_id, target) labeled by more than one annotator, with their names.
+
+    Two opinions on one article is the point of --validate, but `evaluate`
+    joins gold to predictions on exactly this key: left alone, one model verdict
+    would be scored once per annotator and the F1 would quietly weight the
+    validated rows double. Callers must resolve it, not discover it later.
+    """
+    seen: dict[tuple[int, str], list[str]] = defaultdict(list)
+    for g in gold:
+        seen[(g.article_id, g.target)].append(g.annotator)
+    return {k: sorted(v) for k, v in seen.items() if len(v) > 1}
+
+
+def annotator_labels(gold: list[GoldRow]) -> dict[str, dict[tuple[int, str], str]]:
+    """{annotator: {(article_id, target): label}} -- the shape `agreement` wants."""
+    out: dict[str, dict[tuple[int, str], str]] = defaultdict(dict)
+    for g in gold:
+        out[g.annotator][(g.article_id, g.target)] = g.label
+    return dict(out)
+
+
+def render_agreement(gold: list[GoldRow]) -> str:
+    """Pairwise kappa between every pair of annotators sharing a row.
+
+    This is the number that says whether the machine-written gold may stand in
+    for human labels. It compares annotators only -- no model verdict is
+    involved, so it needs no database and spends no quota.
+    """
+    by = annotator_labels(gold)
+    names = sorted(by)
+    if len(names) < 2:
+        return (
+            "annotator agreement\n"
+            f"  only one annotator in the gold set ({names[0] if names else 'none'}).\n"
+            "  run: make label.validate KEYWORD=<target> ARGS=\"--annotator <you>\""
+        )
+    pairs = [agreement(a, by[a], b, by[b]) for i, a in enumerate(names) for b in names[i + 1 :]]
+    pairs = [p for p in pairs if p.n]
+    if not pairs:
+        return (
+            "annotator agreement\n"
+            f"  {len(names)} annotators ({', '.join(names)}) but no shared rows.\n"
+            "  run: make label.validate KEYWORD=<target> ARGS=\"--annotator <you>\""
+        )
+    lines = [f"annotator agreement (kappa: chance-corrected, target > {KAPPA_TARGET:.2f})", ""]
+    for p in pairs:
+        flag = "  <-- below target" if p.kappa <= KAPPA_TARGET else ""
+        lines += [
+            f"  {p.a}  vs  {p.b}",
+            (
+                f"    n={p.n}  agreed {p.observed:.1%}  expected by chance "
+                f"{p.expected:.1%}  kappa {p.kappa:.3f}{flag}"
+            ),
+        ]
+        if p.n < 50:
+            lines.append(f"    n={p.n} is small; treat kappa as a direction, not a verdict.")
+        lines += ["", f"    {'':<6}" + "".join(f"{lab:>6}" for lab in LABELS)]
+        for row in LABELS:
+            lines.append(
+                f"    {row:<6}" + "".join(f"{p.confusion[row][col]:>6}" for col in LABELS)
+            )
+        lines += [f"    rows = {p.a}, cols = {p.b}", ""]
+    return "\n".join(lines).rstrip()
+
+
 def _fill_missing(conn, gold: list[GoldRow], classifier: StanceClassifier) -> int:
     """Classify gold rows that have no cached verdict for this model/prompt."""
     need = [
@@ -177,6 +246,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prompt-version", default=PROMPT_VERSION)
     parser.add_argument("--target", help="restrict to one target keyword")
     parser.add_argument(
+        "--annotator", help="score only this annotator's gold rows (required once rows overlap)"
+    )
+    parser.add_argument(
+        "--agreement",
+        action="store_true",
+        help="report pairwise annotator kappa instead of scoring the model; touches no database",
+    )
+    parser.add_argument(
         "--classify", action="store_true", help="classify gold rows with no verdict (spends quota)"
     )
     parser.add_argument("--rpm", type=float, default=STANCE_RPM)
@@ -191,6 +268,29 @@ def main(argv: list[str] | None = None) -> int:
             f"no gold rows{' for ' + args.target if args.target else ''}; run: make label KEYWORD=<target>"
         )
         return 1
+
+    # Annotators only: no model verdicts, so no database and no quota.
+    if args.agreement:
+        print(render_agreement(gold))
+        return 0
+
+    if args.annotator:
+        gold = [g for g in gold if g.annotator == args.annotator]
+        if not gold:
+            print(f"no gold rows by {args.annotator!r}")
+            return 1
+    else:
+        # A row labeled twice would be joined to one verdict twice and counted
+        # twice. Refuse rather than report a quietly weighted F1.
+        dupes = duplicate_keys(gold)
+        if dupes:
+            who = sorted({a for names in dupes.values() for a in names})
+            print(
+                f"{len(dupes)} gold row(s) carry labels from more than one annotator "
+                f"({', '.join(who)}).\nScoring them all would weight those rows double. "
+                "Pick one with --annotator <name>, or compare them with --agreement."
+            )
+            return 2
 
     with db.connect() as conn:
         if args.classify:
