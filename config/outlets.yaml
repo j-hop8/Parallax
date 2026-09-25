@@ -15,16 +15,16 @@
 defaults:
   rate_limit_seconds: 2.0        # per-outlet token bucket; deliberately conservative
   user_agent: "ParallaxResearchBot/0.1 (media-coverage research; contact: j8211080@gmail.com)"
-  timeout_seconds: 20
+  timeout_seconds: 10
   # Wall-clock budget per outlet per run, checked between feed requests. Normal
   # cost is ~22s for 中央社 (11 feeds at the 2s rate limit) and under two seconds
   # for the rest, so this only engages when a host hangs. Feeds not reached are
   # reported, not dropped. Soft by one request's worst case (~78s at these
   # defaults): the request in flight when the budget runs out is not cut short.
   # tests/test_crawl_health.py checks that a cycle where every host hangs still
-  # fits the 20-minute launchd interval; raising this or timeout_seconds must
+  # fits the 10-minute launchd interval; raising this or timeout_seconds must
   # keep that true.
-  budget_seconds: 180
+  budget_seconds: 90
 
 outlets:
   # ---------------------------------------------------------------- RSS ----

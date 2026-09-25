@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--wait-network",
         type=float,
-        default=120.0,
+        default=60.0,
         metavar="SECONDS",
         help="wait up to SECONDS for connectivity before crawling (0 disables)",
     )

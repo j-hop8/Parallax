@@ -130,7 +130,7 @@ def crawl_all(only: str | None = None) -> list[CrawlResult]:
 
                 if result.error is None:
                     # Zero items from a verified outlet is a broken selector or a
-                    # dead feed, never a quiet 20 minutes -- a listing returns its
+                    # dead feed, never a quiet 10 minutes -- a listing returns its
                     # current window regardless of how much is new.
                     result.ok = result.items_seen > 0
                     if not result.ok:

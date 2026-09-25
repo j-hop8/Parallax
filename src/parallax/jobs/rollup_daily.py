@@ -52,7 +52,7 @@ SELECT c.outlet,
        c.day,
        c.total,
        -- Complete only when the day is over AND successful runs bracket it with
-       -- no gap wider than %(max_gap_minutes)s minutes. The crawl runs every 20,
+       -- no gap wider than %(max_gap_minutes)s minutes. The crawl runs every 10,
        -- so this tolerates a couple of missed cycles but not an outage.
        COALESCE(
            c.day < (now() AT TIME ZONE 'Asia/Taipei')::date

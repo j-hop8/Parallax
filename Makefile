@@ -231,7 +231,7 @@ health:
 	       count(*) AS ok_runs, \
 	       coalesce(max(gap), interval '0') AS largest_gap \
 	FROM r GROUP BY outlet ORDER BY largest_gap DESC NULLS LAST;"
-	@echo "-- largest_gap is the number that matters: the crawl runs every 20 min, so"
+	@echo "-- largest_gap is the number that matters: the crawl runs every 10 min, so"
 	@echo "-- anything past ~1h is coverage this project can never get back."
 	@$(PSQL) -tc "SELECT count(*) FILTER (WHERE NOT ok) || ' failed runs in 24h' FROM crawl_runs WHERE started_at > now() - interval '24 hours';"
 	@uv run python -m parallax.jobs.social --status
