@@ -61,7 +61,7 @@ the full rationale and `Design.pdf` for the target UI.
 ## Common commands
 
 ```bash
-make setup && make db.up && make db.create && make db.migrate
+make setup && make db.up && make db.migrate   # once, on a new machine
 make audit                    # probe feeds + robots.txt
 make crawl.one OUTLET=cna     # single adapter
 make crawl                    # all outlets
