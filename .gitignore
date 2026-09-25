@@ -37,3 +37,6 @@ graphify-out/
 # Codex delegation worktrees (/delegate). Real checkouts of this repo, never
 # content of it -- git add -A will otherwise commit them as gitlinks.
 .worktrees/
+
+# Derived from certifi at runtime (crawl/tls.py); regenerated automatically.
+config/ca-bundle.pem

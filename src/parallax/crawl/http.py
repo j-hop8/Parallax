@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 
 import requests
 
+from .tls import ca_bundle
+
 log = logging.getLogger(__name__)
 
 
@@ -25,6 +27,9 @@ class Fetcher:
         self._last_request: dict[str, float] = {}
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": user_agent})
+        # Full verification, against certifi minus roots OpenSSL refuses to use.
+        # See crawl/tls.py: one malformed anchor in certifi took ftv off the air.
+        self._session.verify = ca_bundle()
 
     def _wait(self, url: str) -> None:
         host = urlsplit(url).netloc.lower()
