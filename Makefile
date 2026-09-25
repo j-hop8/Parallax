@@ -35,6 +35,9 @@ help:
 	@echo "test       pytest"
 	@echo "sched.install  schedule crawl+rollup on this host: launchd on macOS, systemd on Linux"
 	@echo "ops.check  verify the systemd units + the Linux runtime in Docker (no VPS needed)"
+	@echo "setup.demo   demo host: crawl deps + the ui extra"
+	@echo "demo.install  public demo page on this Linux host: Streamlit + Caddy (ops/README.md §10)"
+	@echo "demo.uninstall  remove the demo page unit; the crawl is untouched"
 
 # The full workstation: crawl, classify (llm) and the Streamlit page (ui).
 # `nlp` is deliberately NOT here -- it drags in torch, and nothing in the
@@ -43,10 +46,10 @@ help:
 setup: dict
 	uv sync --extra llm --extra ui
 
-# The always-on crawl host (ops/README.md) runs tier 1 and nothing else: no
-# model key lives there, and no page is served from it. Base deps only -- but
-# still the dictionary, because the listing crawl segments every title it
-# stores and a wrong dictionary silently degrades search and dedup.
+# The always-on crawl host (ops/README.md) runs tier 1: no model key lives
+# there. Base deps only -- but still the dictionary, because the listing crawl
+# segments every title it stores and a wrong dictionary silently degrades
+# search and dedup. The public demo page is opt-in on top (setup.demo below).
 .PHONY: setup.crawl
 setup.crawl: dict
 	uv sync
@@ -335,6 +338,54 @@ sched.uninstall.systemd:
 	@sudo systemctl daemon-reload
 	@echo "systemd units removed"
 
+# ---- public demo page (T-029) ------------------------------------------------
+# The Streamlit page on the crawl host, behind Caddy, as its own unit: kept out
+# of sched.install so scheduling the crawl never installs a web server, and
+# capped (ops/demo/parallax-ui.service) so the page can never starve the crawl.
+# Linux only. Needs Caddy installed and PARALLAX_PUBLIC_HOST in .env
+# (ops/README.md §10). Re-runnable: every run rotates the parallax_ro password,
+# rewrites .env.ui and restarts the page with it.
+# The port is read back from compose, not assumed: PARALLAX_DB_PORT may be set
+# in .env, which compose reads and this shell does not.
+DEMO_UNIT := parallax-ui.service
+
+# `uv sync` alone is exact and would remove streamlit again; on the demo host
+# every deploy syncs with the extra (ops/README.md, "Deploy a change").
+.PHONY: setup.demo
+setup.demo: dict
+	uv sync --extra ui
+
+.PHONY: demo.install
+demo.install: db.migrate
+	@test "$$(uname -s)" = Linux || { echo "demo.install is Linux-only (systemd + Caddy)" >&2; exit 1; }
+	@HOST=$$(sed -n 's/^PARALLAX_PUBLIC_HOST=//p' .env 2>/dev/null | tr -d "\"' "); \
+	test -n "$$HOST" || { echo "set PARALLAX_PUBLIC_HOST in .env, e.g. 203-0-113-5.sslip.io" >&2; exit 1; }; \
+	UV=$$(command -v uv); \
+	test -n "$$UV" || { echo "uv not found on PATH -- refusing to install a unit that cannot run" >&2; exit 1; }; \
+	command -v caddy >/dev/null || { echo "caddy not installed -- see ops/README.md §10" >&2; exit 1; }; \
+	PORT=$$($(DC) port db 5432 | head -1 | sed 's/.*://'); \
+	test -n "$$PORT" || { echo "cannot resolve the published Postgres port (make db.up?)" >&2; exit 1; }; \
+	PW=$$(openssl rand -hex 24); \
+	printf "ALTER ROLE parallax_ro PASSWORD '%s';\n" "$$PW" | $(PSQL) -v ON_ERROR_STOP=1 -q || exit 1; \
+	( umask 077; printf 'PARALLAX_DATABASE_URL=postgresql://parallax_ro:%s@127.0.0.1:%s/parallax\n' \
+		"$$PW" "$$PORT" > .env.ui ) || exit 1; \
+	sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" -e "s#@@USER@@#$$(id -un)#g" \
+		ops/demo/$(DEMO_UNIT) | sudo tee $(SYSTEMD_DIR)/$(DEMO_UNIT) >/dev/null || exit 1; \
+	sed -e "s#@@HOST@@#$$HOST#g" ops/demo/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null || exit 1; \
+	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile || exit 1; \
+	sudo systemctl daemon-reload && sudo systemctl enable $(DEMO_UNIT) && sudo systemctl restart $(DEMO_UNIT) \
+		&& sudo systemctl reload caddy || exit 1; \
+	echo "demo page: https://$$HOST  (first visit may wait a few seconds for the certificate)"
+
+.PHONY: demo.uninstall
+demo.uninstall:
+	@sudo systemctl disable --now $(DEMO_UNIT) 2>/dev/null || true
+	@sudo rm -f $(SYSTEMD_DIR)/$(DEMO_UNIT) && sudo systemctl daemon-reload
+	@printf "ALTER ROLE parallax_ro PASSWORD NULL;\n" | $(PSQL) -q || true
+	@rm -f .env.ui
+	@echo "demo page removed; parallax_ro can no longer log in. Caddy still holds 443:"
+	@echo "sudo systemctl stop caddy  (or point /etc/caddy/Caddyfile elsewhere)"
+
 # ---- backups / migration ----------------------------------------------------
 # Tier-1 rows cannot be re-fetched, so the database is the only copy of the
 # denominator. `-Fc` is compressed and restorable table-by-table. The VPS
@@ -370,10 +421,11 @@ OPS_CHECK := .ops-check
 .PHONY: ops.check
 ops.check:
 	@rm -rf $(OPS_CHECK) && mkdir -p $(OPS_CHECK)/units
-	@for u in $(SYSTEMD_UNITS); do \
+	@for u in $(addprefix ops/systemd/,$(SYSTEMD_UNITS)) ops/demo/$(DEMO_UNIT); do \
 		sed -e "s#@@ROOT@@#/srv/parallax#g" -e "s#@@UV@@#/usr/local/bin/uv#g" -e "s#@@USER@@#parallax#g" \
-			ops/systemd/$$u > $(OPS_CHECK)/units/$$u; \
+			$$u > $(OPS_CHECK)/units/$$(basename $$u); \
 	done
+	@sed -e "s#@@HOST@@#203-0-113-5.sslip.io#g" ops/demo/Caddyfile > $(OPS_CHECK)/Caddyfile
 	@echo "-- systemd-analyze verify (ubuntu:24.04)"
 	@docker run --rm -v "$(CURDIR)/$(OPS_CHECK)/units:/units:ro" ubuntu:24.04 bash -euc '\
 		export DEBIAN_FRONTEND=noninteractive; \
@@ -382,9 +434,14 @@ ops.check:
 		install -m755 /dev/null /usr/local/bin/uv; \
 		cp /units/* /etc/systemd/system/; \
 		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer; \
-		echo "6 units verified (verify prints nothing when clean)"; \
+		echo "$$(ls /units | wc -l) units verified (verify prints nothing when clean)"; \
 		grep -h "^OnCalendar=" /etc/systemd/system/parallax-*.timer | cut -d= -f2- \
 			| while IFS= read -r c; do systemd-analyze calendar "$$c"; done | grep -E "Normalized|Next elapse"'
+	@echo "-- caddy validate (caddy:2), the demo proxy rendered for a sample sslip.io host"
+	@docker run --rm -v "$(CURDIR)/$(OPS_CHECK)/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 \
+		caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile > $(OPS_CHECK)/caddy.log 2>&1 \
+		|| { cat $(OPS_CHECK)/caddy.log >&2; exit 1; }
+	@tail -1 $(OPS_CHECK)/caddy.log
 	@echo "-- Linux runtime: uv sync + dry-run crawl of cna (ghcr.io/astral-sh/uv:python3.12-bookworm-slim)"
 	@docker run --rm -v "$(CURDIR):/src:ro" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -euc '\
 		tar -C /src --exclude=.venv --exclude=raw --exclude=logs --exclude=backups --exclude=graphify-out \

@@ -88,3 +88,7 @@ THREADS_API_BASE = os.environ.get("THREADS_API_BASE", "https://graph.threads.net
 # articles. Below this many *classified* posts the panel shows the floor instead
 # of a distribution.
 MIN_PLATFORM_POSTS = int(os.environ.get("MIN_PLATFORM_POSTS", "30"))
+
+# Q4 (social platforms) ships in v2.0.0. Off by default so the news-only line
+# never shows an empty panel; the code, tables and tests stay for 2.0.0.
+SOCIAL_ENABLED = os.environ.get("PARALLAX_SOCIAL", "0") == "1"

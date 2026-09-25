@@ -13,7 +13,10 @@ page and report hide it unless `PARALLAX_SOCIAL=1`, and its tickets live in
 1. **The tier-1 listing crawl must never stop.** `article_index` is the
    denominator for coverage weight. RSS exposes only hours of history, so any
    window where the crawl is down is permanently unrecoverable — no backfill
-   exists. Check `make health` before assuming things are fine.
+   exists. Check `make health` before assuming things are fine. The public
+   demo page shares that host (T-029, `ops/README.md` §10) only as a capped
+   unit reading through the read-only `parallax_ro` role. Anything that
+   writes belongs in tier 2 on the laptop, never in the page.
 
 2. **One outlet failing must not abort the crawl.** Every adapter runs isolated
    and records to `crawl_runs` either way — including the database writes, not
