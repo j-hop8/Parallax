@@ -107,3 +107,20 @@ def test_role_can_read_every_table_and_write_none(conn):
                 "SELECT has_table_privilege('parallax_ro', %s, %s)", (f"public.{t}", priv)
             ).fetchone()[0]
             assert got is expected, f"parallax_ro {priv} on {t}: {got}"
+
+
+def test_migration_is_idempotent(conn):
+    """Applied twice -- as db.migrate does on every run and after a restore --
+    it still leaves exactly SELECT. Inside a transaction that is rolled back:
+    role and grant changes are transactional in Postgres."""
+    sql = MIGRATION.read_text()
+    try:
+        conn.execute(sql)
+        conn.execute(sql)
+        for priv, expected in (("SELECT", True), ("INSERT", False)):
+            got = conn.execute(
+                "SELECT has_table_privilege('parallax_ro', 'public.article_index', %s)", (priv,)
+            ).fetchone()[0]
+            assert got is expected, priv
+    finally:
+        conn.rollback()

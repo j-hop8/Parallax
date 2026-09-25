@@ -345,6 +345,8 @@ sched.uninstall.systemd:
 # Linux only. Needs Caddy installed and PARALLAX_PUBLIC_HOST in .env
 # (ops/README.md §10). Re-runnable: every run rotates the parallax_ro password,
 # rewrites .env.ui and restarts the page with it.
+# The port is read back from compose, not assumed: PARALLAX_DB_PORT may be set
+# in .env, which compose reads and this shell does not.
 DEMO_UNIT := parallax-ui.service
 
 # `uv sync` alone is exact and would remove streamlit again; on the demo host
@@ -361,10 +363,12 @@ demo.install: db.migrate
 	UV=$$(command -v uv); \
 	test -n "$$UV" || { echo "uv not found on PATH -- refusing to install a unit that cannot run" >&2; exit 1; }; \
 	command -v caddy >/dev/null || { echo "caddy not installed -- see ops/README.md §10" >&2; exit 1; }; \
+	PORT=$$($(DC) port db 5432 | head -1 | sed 's/.*://'); \
+	test -n "$$PORT" || { echo "cannot resolve the published Postgres port (make db.up?)" >&2; exit 1; }; \
 	PW=$$(openssl rand -hex 24); \
 	printf "ALTER ROLE parallax_ro PASSWORD '%s';\n" "$$PW" | $(PSQL) -v ON_ERROR_STOP=1 -q || exit 1; \
 	( umask 077; printf 'PARALLAX_DATABASE_URL=postgresql://parallax_ro:%s@127.0.0.1:%s/parallax\n' \
-		"$$PW" "$${PARALLAX_DB_PORT:-5433}" > .env.ui ) || exit 1; \
+		"$$PW" "$$PORT" > .env.ui ) || exit 1; \
 	sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" -e "s#@@USER@@#$$(id -un)#g" \
 		ops/demo/$(DEMO_UNIT) | sudo tee $(SYSTEMD_DIR)/$(DEMO_UNIT) >/dev/null || exit 1; \
 	sed -e "s#@@HOST@@#$$HOST#g" ops/demo/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null || exit 1; \
