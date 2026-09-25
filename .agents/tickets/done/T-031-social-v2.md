@@ -1,6 +1,8 @@
 # T-031 — Record the scope decision: social media (Q4) is version 2.0.0
 
-**Owner:** claude (a product decision, docs only). **Blocked by:** nothing.
+**Owner:** claude (a product decision, docs only). **Blocked by:** #34
+(T-030) -- merge after it. These docs describe the `PARALLAX_SOCIAL` gate
+T-030 adds; landing first would document behaviour `main` does not have.
 
 ## Why
 
@@ -22,7 +24,7 @@ panel. The docs still describe Q4 as part of Phase 2 and milestone week 6.
 
 `parallax-proposal.md` (§1, §3, §5, §11), `CLAUDE.md` (intro only),
 `README.md` (the `make social` line), `.agents/tickets/T-023-post-validation.md`
-→ `.agents/tickets/v2.0.0/`.
+→ `.agents/tickets/v2.0.0/`, this ticket.
 
 ## Do not touch
 
