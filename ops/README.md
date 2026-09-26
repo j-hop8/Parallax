@@ -170,8 +170,9 @@ domain needed; sslip.io resolves the name to the IP inside it, and Caddy gets
 a Let's Encrypt certificate for it. The page runs as its own unit
 (`ops/demo/parallax-ui.service`), never installed by `sched.install`, and is
 built so it cannot hurt the crawl: a 768 MB memory cap, a positive OOM score,
-and the `parallax_ro` database role (read-only transactions, 15 s statement
-timeout, 20 connections at most -- `db/migrations/004`).
+the `parallax_ro` database role (read-only transactions, 15 s statement
+timeout, 20 connections at most -- `db/migrations/004`), and a sandbox that
+hides `.env` (the owner password) and the Docker socket from it (T-034).
 
 ```bash
 # Caddy, from its official apt repository (https://caddyserver.com/docs/install#debian-ubuntu-raspbian)
@@ -195,6 +196,10 @@ Expected: `demo page: https://<host>`. Then:
 systemctl status parallax-ui --no-pager
 curl -s https://<host>/_stcore/health      # ok
 systemctl show parallax-ui -p MemoryCurrent
+# the sandbox, seen from inside the page's own mount namespace -- both must fail:
+PID=$(systemctl show -p MainPID --value parallax-ui)
+sudo nsenter -t "$PID" -m cat "$PWD/.env"          # Permission denied
+sudo nsenter -t "$PID" -m test -r /run/docker.sock || echo "docker socket hidden"
 sudo systemctl stop parallax-ui && make health && sudo systemctl start parallax-ui
 ```
 

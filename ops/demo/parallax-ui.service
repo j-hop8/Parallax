@@ -19,8 +19,20 @@ User=@@USER@@
 WorkingDirectory=@@ROOT@@
 # PARALLAX_DATABASE_URL as parallax_ro, written by demo.install (mode 600). An
 # exported variable wins over .env -- settings._load_dotenv never overrides --
-# so this process never sees the owner URL the crawl uses.
+# so the owner URL the crawl uses never reaches this process's environment.
 EnvironmentFile=@@ROOT@@/.env.ui
+# ...nor its filesystem (T-034). It runs as the crawl's user, who owns .env
+# and is in the docker group -- and the Docker socket is root on this host. A
+# bug in a public page must reach neither, so both are hidden from this unit's
+# mount namespace; settings._load_dotenv treats an unreadable .env as absent.
+# EnvironmentFile is read by systemd before the namespace exists, so .env.ui
+# still works. The '-' prefix tolerates a path that does not exist.
+InaccessiblePaths=-@@ROOT@@/.env -/run/docker.sock -/var/run/docker.sock
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
 ExecStart=@@UV@@ run --extra ui streamlit run src/parallax/ui/app.py --server.address=127.0.0.1 --server.port=8501
 Restart=always
 RestartSec=5

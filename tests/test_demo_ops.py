@@ -42,6 +42,24 @@ def test_page_reads_the_readonly_url_and_listens_on_loopback_only():
     assert "--server.port=8501" in d["ExecStart"]
 
 
+def test_page_cannot_reach_the_owner_secret_or_the_docker_socket():
+    """Same user as the crawl, so the unit's namespace must hide both (T-034)."""
+    hidden = _directives(UNIT.read_text())["InaccessiblePaths"].split()
+    assert "-@@ROOT@@/.env" in hidden, "the owner database URL"
+    assert "-/run/docker.sock" in hidden and "-/var/run/docker.sock" in hidden
+
+
+def test_an_unreadable_env_file_is_treated_as_absent(tmp_path, monkeypatch):
+    """What the page sees once .env is hidden: settings must not crash on it."""
+    from parallax import settings
+
+    def unreadable(self, *a, **k):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "read_text", unreadable)
+    settings._load_dotenv(tmp_path / ".env")  # must not raise
+
+
 def test_sched_install_never_installs_a_web_server():
     """sched.install installs every unit in ops/systemd/; the page is not one."""
     for unit in (ROOT / "ops" / "systemd").iterdir():
