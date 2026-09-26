@@ -46,6 +46,9 @@ DATABASE_URL = os.environ.get(
     "postgresql://parallax:parallax@localhost:5433/parallax",
 )
 
+# Optional dead-man's switch for the scheduled tier-1 crawl.
+HEARTBEAT_URL = os.environ.get("PARALLAX_HEARTBEAT_URL") or None
+
 # Every day-bucket in the system is Taipei local. Bucketing by UTC would push
 # everything published after 08:00 local into the wrong day and quietly corrupt
 # the coverage-weight denominator.
