@@ -8,7 +8,8 @@ laptop keeps everything keyword-driven (enrich, dedup, framing, stance, the
 UI) and reaches the database through an SSH tunnel that lands on the same
 `localhost:5433` the code already defaults to. No code changes for the move.
 
-Target: Ubuntu 24.04 LTS, x86_64. For tier 1 alone 1 vCPU / 1 GB is plenty
+Target: Ubuntu 24.04 LTS, x86_64 or arm64 (`make ops.check` on an Apple
+Silicon Mac verifies the arm64 build, which is what Oracle's A1 runs). For tier 1 alone 1 vCPU / 1 GB is plenty
 (the crawl is network-bound; Postgres holds ~50 MB). With the public demo page
 (§10) take **2 GB or more**: the page holds jieba's dictionary (~300 MB RSS
 measured) next to the crawl, which holds its own; 4 GB also leaves room for
@@ -22,6 +23,64 @@ There is a window between **stopping the laptop crawl** (step 5) and the
 **VPS crawl's first confirmed run** (step 7). Anything published in that
 window is lost. Keep it short: do steps 1–4 with the laptop crawl still
 running, and only stop it once the VPS is one command away.
+
+## Oracle Cloud Always Free -- read this first if that is the host
+
+The chosen host (2026-09-26) is Oracle's Always Free tier in Tokyo: an Ampere
+A1 (arm64) VM, **2 OCPU / 12 GB** total, 200 GB of block storage, 10 TB/month
+outbound, $0. It changes a few steps below, and it brings one risk the other
+hosts do not.
+
+**The risk: Oracle reclaims idle Always Free instances.** Idle means, over 7
+days, CPU 95th percentile < 20% **and** network < 20% **and** memory < 20%
+(the memory test applies to A1 only). A metadata crawl passes the first two
+easily, so the instance is only safe while memory stays at or above 20%.
+What guards against it and against losing the VM for any other reason:
+
+1. **Pay As You Go** (recommended): upgrade the account and set a **US$1
+   budget alert** at once. Staying inside the Always Free limits still costs
+   $0. Community reports say PAYG accounts are not idle-reclaimed and get A1
+   capacity more easily; Oracle's docs do not say either way, so the next
+   three guards do not depend on it.
+2. **Watch memory after day one:** console → the instance → Metrics →
+   *Memory Utilization*. At 12 GB, crawl + Postgres + the demo page may sit
+   below 20%. If it does and the account is not PAYG, shrink the instance to
+   **1 OCPU / 6 GB** (Edit → shape; a reboot) -- the same workload is then
+   above the bar. No synthetic load: faking CPU use games the policy.
+3. **A heartbeat** (T-033, `PARALLAX_HEARTBEAT_URL`): a stopped, reclaimed or
+   broken crawl emails you within ~40 minutes.
+4. **Off-host backups** (§11): the workstation pulls the VM's dumps daily, so
+   losing the VM never loses the denominator.
+
+**Creating it:**
+
+- Sign up with home region **Japan East (Tokyo)**. Always Free resources
+  exist only in the home region, and it cannot be changed later.
+- Instance: shape `VM.Standard.A1.Flex`, 2 OCPU / 12 GB, image *Canonical
+  Ubuntu 24.04* (aarch64), boot volume 50 GB, your SSH public key. "Out of
+  host capacity" is common: retry later (Tokyo has one availability domain).
+- Networking → the VCN's default Security List → add ingress TCP **80** and
+  **443** from `0.0.0.0/0`. 22 is there already.
+- The public IP is the instance's for its lifetime (kept across stop/start,
+  released only on terminate) -- the sslip.io URL is built from it.
+
+**How §1 and §10 differ on this image:**
+
+- You log in as `ubuntu` (passwordless sudo), not root: prefix §1's
+  commands with `sudo`. `adduser parallax` asks for a password -- set one;
+  `sched.install` and `demo.install` use sudo as that user. Then give it
+  your key: `sudo mkdir -p ~parallax/.ssh && sudo cp ~/.ssh/authorized_keys
+  ~parallax/.ssh/ && sudo chown -R parallax: ~parallax/.ssh`.
+- **Skip every `ufw` line.** The image ships its own iptables rules
+  (`/etc/iptables/rules.v4`, netfilter-persistent) that reject everything but
+  SSH; ufw on top of them opens nothing. `sudo iptables -L INPUT -n` shows
+  the final `REJECT`. In §10, run `make oci.firewall` instead of `ufw allow`.
+- Restarts need nobody: systemd timers and Docker start at boot without a
+  login, and `Persistent=true` runs a missed crawl slot at once. Keep
+  unattended-upgrades' default `Unattended-Upgrade::Automatic-Reboot "false"`
+  (`/etc/apt/apt.conf.d/50unattended-upgrades`): security fixes install
+  without a reboot. Once a month, if `/var/run/reboot-required` exists,
+  `sudo reboot` while you can watch `make health` afterwards.
 
 ## 1. Provision
 
@@ -162,6 +221,7 @@ ssh parallax@<vps> make -C parallax health
   the 00:20 rollup; `make report` rows move from `2 / N 天` to `3 / N 天`.
 - `ls backups/` on the VPS: one dump per day from 03:00 Taipei; older than
   14 days are pruned.
+- Oracle: the instance's *Memory Utilization* metric (Oracle block, guard 2).
 
 ## 10. Public demo page (optional, any time after §7)
 
@@ -181,6 +241,7 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo 
 sudo apt-get update && sudo apt-get install -y caddy
 
 sudo ufw allow 80,443/tcp      # 80 for the certificate challenge and the https redirect
+# Oracle image instead of the line above: make oci.firewall  (see the Oracle block)
 
 # the hostname: this server's IPv4 with dashes
 echo "PARALLAX_PUBLIC_HOST=$(curl -4s https://ifconfig.me | tr . -).sslip.io" >> .env
@@ -204,6 +265,27 @@ keywords so the page has something to show; the page itself never writes.
 
 Moving to a real domain later: point an A record at the server, set
 `PARALLAX_PUBLIC_HOST` to it, `make demo.install` again.
+
+## 11. Off-host backups (the workstation pulls them)
+
+The VM's daily dump lives on the VM's own disk. If the VM goes -- reclaimed,
+terminated, a lost account -- that copy goes with it, and tier-1 rows cannot
+be re-fetched. So the workstation (this Mac) pulls every dump daily at
+04:00, an hour after the VM writes it, over the SSH key §8 already uses.
+
+```bash
+# workstation .env
+PARALLAX_BACKUP_HOST=parallax@<vps-ip>
+
+make backup.pull               # once by hand: proves ssh + rsync work non-interactively
+make backup.pull.install       # then daily via launchd -> logs/backup-pull.log
+```
+
+It keeps the newest 30 in `backups/vm/`, and exits non-zero -- a `STALE`
+line in the log -- when the newest dump is over 36 hours old: the VM's backup
+timer, or the VM, has stopped. `sched.uninstall` (§5) leaves it alone; remove
+it with `make backup.pull.uninstall`. Rehearse a restore from it with §4's
+throwaway `pxdrill` project now and then.
 
 ## Operating
 

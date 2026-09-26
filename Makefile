@@ -38,6 +38,9 @@ help:
 	@echo "setup.demo   demo host: crawl deps + the ui extra"
 	@echo "demo.install  public demo page on this Linux host: Streamlit + Caddy (ops/README.md §10)"
 	@echo "demo.uninstall  remove the demo page unit; the crawl is untouched"
+	@echo "oci.firewall  Oracle VM only: open 80/443 in the image's own iptables rules"
+	@echo "backup.pull  copy the VM's dumps here, HOST=parallax@<ip> or PARALLAX_BACKUP_HOST in .env"
+	@echo "backup.pull.install  pull daily at 04:00 via launchd (macOS); independent of sched.install"
 
 # The full workstation: crawl, classify (llm) and the Streamlit page (ui).
 # `nlp` is deliberately NOT here -- it drags in torch, and nothing in the
@@ -386,6 +389,23 @@ demo.uninstall:
 	@echo "demo page removed; parallax_ro can no longer log in. Caddy still holds 443:"
 	@echo "sudo systemctl stop caddy  (or point /etc/caddy/Caddyfile elsewhere)"
 
+# ---- Oracle Always Free host (T-032) ----------------------------------------
+# Oracle's Ubuntu images ship their own iptables rules (netfilter-persistent,
+# /etc/iptables/rules.v4) that REJECT everything but SSH, and ufw layered on
+# top opens nothing. So on that image: no ufw; insert one ACCEPT for 80/443
+# ahead of the REJECT and persist it. Idempotent (-C checks first). The VCN
+# security list must allow the same two ports (ops/README.md, Oracle block).
+OCI_RULE := INPUT -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW -j ACCEPT
+
+.PHONY: oci.firewall
+oci.firewall:
+	@test "$$(uname -s)" = Linux || { echo "oci.firewall runs on the Oracle VM" >&2; exit 1; }
+	@command -v netfilter-persistent >/dev/null || { \
+		echo "no netfilter-persistent: not Oracle's image -- use ufw (ops/README.md §10)" >&2; exit 1; }
+	@sudo iptables -C $(OCI_RULE) 2>/dev/null || sudo iptables -I $(OCI_RULE)
+	@sudo netfilter-persistent save >/dev/null
+	@sudo iptables -L INPUT -n --line-numbers | head -8
+
 # ---- backups / migration ----------------------------------------------------
 # Tier-1 rows cannot be re-fetched, so the database is the only copy of the
 # denominator. `-Fc` is compressed and restorable table-by-table. The VPS
@@ -408,6 +428,49 @@ db.restore: db.wait
 	@$(DC) exec -T db pg_restore -U parallax -d parallax --clean --if-exists --no-owner < "$(FILE)"
 	@$(DC) exec -T db psql -U parallax -d parallax -tAc \
 		"SELECT count(*) || ' article_index rows, ' || (SELECT count(*) FROM outlet_daily_totals WHERE complete) || ' complete outlet-days' FROM article_index;"
+
+# Off-host copies (T-032). The VM keeps 14 days of dumps on its own disk; an
+# Always Free VM can be reclaimed or lost with that disk, so the workstation
+# pulls them. --ignore-existing: a dump is immutable once written. Keeps the
+# newest $(BACKUP_KEEP), and exits non-zero when the newest one is over 36h
+# old -- the VM's backup timer (or the VM) has stopped, and launchd's log
+# should say so rather than keep copying the same old file.
+BACKUP_PULL_DIR := $(BACKUP_DIR)/vm
+BACKUP_KEEP := 30
+BACKUP_PLIST := $(HOME)/Library/LaunchAgents/com.parallax.backup-pull.plist
+
+.PHONY: backup.pull
+backup.pull:
+	@HOST="$(HOST)"; \
+	[ -n "$$HOST" ] || HOST=$$(sed -n 's/^PARALLAX_BACKUP_HOST=//p' .env 2>/dev/null | tr -d "\"' "); \
+	test -n "$$HOST" || { echo "usage: make backup.pull HOST=parallax@<vm-ip>  (or PARALLAX_BACKUP_HOST in .env)" >&2; exit 1; }; \
+	mkdir -p $(BACKUP_PULL_DIR); \
+	rsync -a --ignore-existing -e "ssh -o BatchMode=yes -o ConnectTimeout=20" \
+		"$$HOST:parallax/$(BACKUP_DIR)/" $(BACKUP_PULL_DIR)/ || exit 1; \
+	ls -1t $(BACKUP_PULL_DIR)/parallax-*.dump 2>/dev/null | tail -n +$$(( $(BACKUP_KEEP) + 1 )) | xargs rm -f; \
+	NEWEST=$$(ls -1t $(BACKUP_PULL_DIR)/parallax-*.dump 2>/dev/null | head -1); \
+	test -n "$$NEWEST" || { echo "$$(date '+%F %T') no dumps pulled from $$HOST" >&2; exit 1; }; \
+	if [ -n "$$(find "$$NEWEST" -mmin +2160)" ]; then \
+		echo "$$(date '+%F %T') STALE: newest dump $$NEWEST is over 36h old -- check the VM" >&2; exit 1; \
+	fi; \
+	echo "$$(date '+%F %T') ok: $$(ls $(BACKUP_PULL_DIR)/parallax-*.dump | wc -l | tr -d ' ') dumps, newest $$NEWEST"
+
+.PHONY: backup.pull.install
+backup.pull.install:
+	@test "$$(uname -s)" = Darwin || { echo "backup.pull.install schedules launchd (macOS)" >&2; exit 1; }
+	@$(MAKE) --no-print-directory backup.pull
+	@mkdir -p $(dir $(BACKUP_PLIST)) logs
+	@sed -e "s#@@ROOT@@#$(CURDIR)#g" ops/com.parallax.backup-pull.plist.template > $(BACKUP_PLIST)
+	@plutil -lint $(BACKUP_PLIST) >/dev/null
+	@launchctl unload $(BACKUP_PLIST) 2>/dev/null || true
+	@launchctl load $(BACKUP_PLIST)
+	@echo "loaded com.parallax.backup-pull (daily 04:00, log: logs/backup-pull.log)"
+
+.PHONY: backup.pull.uninstall
+backup.pull.uninstall:
+	@launchctl unload $(BACKUP_PLIST) 2>/dev/null || true
+	@rm -f $(BACKUP_PLIST)
+	@echo "backup pull removed; dumps already in $(BACKUP_PULL_DIR) are kept"
 
 # ---- ops.check: verify the Linux packaging without a Linux host ----------
 # This Mac has no systemd, so the rendered units are checked by systemd's own
