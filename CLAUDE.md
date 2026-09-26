@@ -1,9 +1,12 @@
 # Parallax 視差
 
 Measures how Taiwanese outlets diverge covering the same incident: stance (Q1),
-share of daily output (Q2), who copied whom and what each one changed (Q3), and
-social-platform lean (Q4). See [parallax-proposal.md](parallax-proposal.md) for
-the full rationale and `Design.pdf` for the target UI.
+share of daily output (Q2), and who copied whom and what each one changed (Q3).
+Social-platform lean (Q4) is **version 2.0.0**: its code and tables stay, the
+page and report hide it unless `PARALLAX_SOCIAL=1`, and its tickets live in
+`.agents/tickets/v2.0.0/`. Phases 2–3 are news only. See
+[parallax-proposal.md](parallax-proposal.md) for the full rationale and
+`Design.pdf` for the target UI.
 
 ## Invariants — break these and the data is wrong, often silently
 
