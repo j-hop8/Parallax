@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UNIT = ROOT / "ops" / "demo" / "parallax-ui.service"
 CADDYFILE = ROOT / "ops" / "demo" / "Caddyfile"
 MIGRATION = ROOT / "db" / "migrations" / "004_ui_readonly_role.sql"
+MAKEFILE = ROOT / "Makefile"
 
 
 def _directives(text: str) -> dict[str, str]:
@@ -42,11 +43,25 @@ def test_page_reads_the_readonly_url_and_listens_on_loopback_only():
     assert "--server.port=8501" in d["ExecStart"]
 
 
+def test_page_never_runs_as_the_crawls_user():
+    """Same-user sandboxing leaks through /proc/<crawl-pid>/root (T-034): the
+    page needs an identity of its own, reading the code only via the group."""
+    d = _directives(UNIT.read_text())
+    assert "User" not in d, "the crawl's user can reach .env and the Docker socket"
+    assert d["DynamicUser"] == "yes"
+    assert d["SupplementaryGroups"] == "@@GROUP@@"
+    assert d["ExecStart"].startswith("@@ROOT@@/.venv/bin/python "), "no uv: it cannot write"
+
+
 def test_page_cannot_reach_the_owner_secret_or_the_docker_socket():
-    """Same user as the crawl, so the unit's namespace must hide both (T-034)."""
     hidden = _directives(UNIT.read_text())["InaccessiblePaths"].split()
     assert "-@@ROOT@@/.env" in hidden, "the owner database URL"
     assert "-/run/docker.sock" in hidden and "-/var/run/docker.sock" in hidden
+
+
+def test_demo_install_makes_the_owner_secret_owner_only():
+    recipe = MAKEFILE.read_text().split("demo.install: db.migrate", 1)[1].split("\n.PHONY", 1)[0]
+    assert "chmod 600 .env" in recipe
 
 
 def test_an_unreadable_env_file_is_treated_as_absent(tmp_path, monkeypatch):

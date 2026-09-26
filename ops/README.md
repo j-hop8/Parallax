@@ -231,8 +231,11 @@ a Let's Encrypt certificate for it. The page runs as its own unit
 (`ops/demo/parallax-ui.service`), never installed by `sched.install`, and is
 built so it cannot hurt the crawl: a 768 MB memory cap, a positive OOM score,
 the `parallax_ro` database role (read-only transactions, 15 s statement
-timeout, 20 connections at most -- `db/migrations/004`), and a sandbox that
-hides `.env` (the owner password) and the Docker socket from it (T-034).
+timeout, 20 connections at most -- `db/migrations/004`), and an identity of
+its own (T-034): a transient systemd user that reads the code through your
+group but cannot read `.env` (the owner password, kept `0600`) or reach the
+Docker socket -- not even through the crawl's `/proc/<pid>/root`. Your home
+must stay `0750` (Ubuntu's default) or the page cannot read the code.
 
 ```bash
 # Caddy, from its official apt repository (https://caddyserver.com/docs/install#debian-ubuntu-raspbian)
@@ -257,10 +260,16 @@ Expected: `demo page: https://<host>`. Then:
 systemctl status parallax-ui --no-pager
 curl -s https://<host>/_stcore/health      # ok
 systemctl show parallax-ui -p MemoryCurrent
-# the sandbox, seen from inside the page's own mount namespace -- both must fail:
-PID=$(systemctl show -p MainPID --value parallax-ui)
-sudo nsenter -t "$PID" -m cat "$PWD/.env"          # Permission denied
-sudo nsenter -t "$PID" -m test -r /run/docker.sock || echo "docker socket hidden"
+# the page's identity: a dynamic user, groups = yours, never docker
+ps -o user=,group=,supgrp= -p "$(systemctl show -p MainPID --value parallax-ui)"
+# the same identity rules as a throwaway unit (not root, unlike nsenter). The
+# control must print; the three probes must all be refused -- the last is the
+# /proc/<pid>/root route into a process of yours, the crawl's included:
+AS_PAGE="sudo systemd-run --quiet --wait --pipe -p DynamicUser=yes -p SupplementaryGroups=$(id -gn)"
+$AS_PAGE head -1 "$PWD/pyproject.toml"                                  # control: [project]
+$AS_PAGE cat "$PWD/.env"                                                # Permission denied
+$AS_PAGE test -w /run/docker.sock || echo "docker socket refused"
+sleep 60 & $AS_PAGE cat "/proc/$!/root$PWD/.env"                        # Permission denied
 sudo systemctl stop parallax-ui && make health && sudo systemctl start parallax-ui
 ```
 

@@ -16,21 +16,43 @@ So any code-execution bug in a public Streamlit page could read the owner
 password off disk, or take the host through the socket. The read-only role
 only bounded what the page's *configuration* could do, not the process.
 
-## Design — decided
+## Design — decided (revised after the Codex review on #39)
 
-Hide both from the unit's mount namespace rather than add a second user:
-`InaccessiblePaths=-@@ROOT@@/.env -/run/docker.sock -/var/run/docker.sock`.
-`EnvironmentFile=.env.ui` still works, because systemd reads it before the
-namespace exists. `settings._load_dotenv` already treats an unreadable `.env`
-as absent (`except OSError`), so nothing in `src/` changes. Plus cheap
-hardening that costs the page nothing: `ProtectSystem=full`,
-`ProtectKernelTunables`, `ProtectKernelModules`, `ProtectControlGroups`,
-`RestrictSUIDSGID` (NoNewPrivileges and PrivateTmp were already set).
+First version: hide `.env` and the socket from the unit's mount namespace
+(`InaccessiblePaths`) while still running as the crawl's user. Codex showed
+it leaks: any process of that user can open `/proc/<crawl-pid>/root/...`,
+the crawl's unmasked view. Reproduced in systemd 255 (Ubuntu 24.04's): the
+same-user sandbox read `.env` straight through `/proc`.
+
+So the page gets **an identity of its own**:
+
+- `DynamicUser=yes` + `SupplementaryGroups=@@GROUP@@`: a transient user that
+  reads the code through the crawl user's group (home `0750`, files `0644`)
+  but cannot read `.env` (`0600`, which `demo.install` now enforces), cannot
+  touch the Docker socket (`root:docker 0660`), and is refused on another
+  user's `/proc/<pid>/root`. DynamicUser also implies `ProtectSystem=strict`,
+  `ProtectHome=read-only`, `PrivateTmp`, `NoNewPrivileges`, `RestrictSUIDSGID`.
+- `ExecStart` is the venv's interpreter, not `uv run` -- that user cannot
+  write the venv or uv's cache; deploys already `uv sync --extra ui`.
+- `InaccessiblePaths` stays as a second layer. `EnvironmentFile=.env.ui` is
+  read by systemd as root before the drop, so it still works at `0600`.
+- The runbook's check no longer uses root `nsenter` (root passes any
+  permission test). It runs probes under the same identity rules with
+  `systemd-run -p DynamicUser=yes -p SupplementaryGroups=…`: a control that
+  must succeed, and `.env`, the socket and `/proc/<pid>/root` that must fail.
+
+Verified in a throwaway systemd 255 container: control readable, venv python
+through the home runs, `.env` / socket / `/proc` route all refused, while the
+old same-user design leaked the secret through `/proc`; the rendered unit
+starts as `parallax-ui` with groups `parallax,parallax-ui`, the RO URL, 768M
+cap and `ProtectSystem=strict`.
 
 ## Files in scope
 
-`ops/demo/parallax-ui.service`, `ops/README.md` (§10 description + an
-nsenter check), `CLAUDE.md` (invariant 1, one clause), `tests/test_demo_ops.py`,
+`ops/demo/parallax-ui.service`, `ops/README.md` (§10 description + the
+identity check), `CLAUDE.md` (invariant 1, one clause), `Makefile`
+(`demo.install`: `chmod 600 .env`, `@@GROUP@@`, the streamlit-in-venv check;
+`ops.check`: `@@GROUP@@` and a stub venv interpreter), `tests/test_demo_ops.py`,
 this ticket.
 
 ## Acceptance criteria
@@ -38,8 +60,8 @@ this ticket.
 - `make ops.check` verifies the hardened unit (systemd-analyze).
 - Tests pin both hidden paths, and that `_load_dotenv` survives a
   PermissionError.
-- On the VM (§10): `nsenter` into the page's namespace cannot read `.env` or
-  the Docker socket, and the page still renders.
+- On the VM (§10): the control probe reads the code; `.env`, the socket and
+  the `/proc/<pid>/root` route are refused; the page still renders.
 
 ## Verify
 

@@ -1,6 +1,6 @@
 # Public demo page (T-029): the Streamlit UI, on loopback, behind Caddy.
-# Rendered by `make demo.install` with the same @@ROOT@@/@@UV@@/@@USER@@
-# substitution as ops/systemd/*. It lives outside ops/systemd/ on purpose:
+# Rendered by `make demo.install` (@@ROOT@@, and @@GROUP@@ = the crawl user's
+# group). It lives outside ops/systemd/ on purpose:
 # `make sched.install` installs every unit in there, and scheduling the crawl
 # must never put a web server on the host as a side effect.
 #
@@ -15,32 +15,36 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=@@USER@@
+# Its own identity, never the crawl's (T-034). Sandboxing the crawl's user is
+# not enough: any process of that user can walk /proc/<crawl-pid>/root back
+# into the host filesystem -- .env (the owner database URL) and the Docker
+# socket (root on this host) included. A transient DynamicUser cannot: .env
+# is 0600 to its owner (demo.install enforces it), the socket is root:docker
+# 0660, and /proc/<pid>/root of another user's process is refused. It reads
+# the code through the crawl user's group, which the 0750 home allows.
+# DynamicUser also implies ProtectSystem=strict, ProtectHome=read-only,
+# PrivateTmp, NoNewPrivileges and RestrictSUIDSGID.
+DynamicUser=yes
+SupplementaryGroups=@@GROUP@@
 WorkingDirectory=@@ROOT@@
-# PARALLAX_DATABASE_URL as parallax_ro, written by demo.install (mode 600). An
-# exported variable wins over .env -- settings._load_dotenv never overrides --
-# so the owner URL the crawl uses never reaches this process's environment.
+Environment=HOME=/tmp
+# PARALLAX_DATABASE_URL as parallax_ro, written by demo.install (mode 600).
+# systemd reads it as root before dropping to the page's user; an exported
+# variable wins over .env, so the owner URL never reaches this process.
 EnvironmentFile=@@ROOT@@/.env.ui
-# ...nor its filesystem (T-034). It runs as the crawl's user, who owns .env
-# and is in the docker group -- and the Docker socket is root on this host. A
-# bug in a public page must reach neither, so both are hidden from this unit's
-# mount namespace; settings._load_dotenv treats an unreadable .env as absent.
-# EnvironmentFile is read by systemd before the namespace exists, so .env.ui
-# still works. The '-' prefix tolerates a path that does not exist.
+# Belt and braces on top of the identity: not even the paths exist in here.
 InaccessiblePaths=-@@ROOT@@/.env -/run/docker.sock -/var/run/docker.sock
-ProtectSystem=full
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictSUIDSGID=yes
-ExecStart=@@UV@@ run --extra ui streamlit run src/parallax/ui/app.py --server.address=127.0.0.1 --server.port=8501
+# The venv's interpreter, not `uv run`: this user may not write the venv or
+# uv's cache, and every deploy already syncs it (uv sync --extra ui).
+ExecStart=@@ROOT@@/.venv/bin/python -m streamlit run src/parallax/ui/app.py --server.address=127.0.0.1 --server.port=8501
 Restart=always
 RestartSec=5
 MemoryMax=768M
 OOMScoreAdjust=500
 Nice=10
-NoNewPrivileges=yes
-PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
