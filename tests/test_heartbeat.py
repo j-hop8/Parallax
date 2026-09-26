@@ -54,7 +54,7 @@ def test_full_run_pings_its_outcome_after_crawl_returns(monkeypatch, failed):
         assert events == ["crawl finished"]
         events.append("ping")
         assert url == PING_URL + ("/fail" if failed else "")
-        assert timeout == 5
+        assert timeout == (5, 5)
         return response
 
     monkeypatch.setattr(job, "crawl_all", crawl)
@@ -87,7 +87,7 @@ def test_ping_exceptions_are_bounded_and_do_not_leak_urls(monkeypatch, caplog, f
 
     assert job.main([]) == int(failed)
     url = PING_URL + ("/fail" if failed else "")
-    assert requests.get.call_args_list == [call(url, timeout=5)] * 2
+    assert requests.get.call_args_list == [call(url, timeout=(5, 5))] * 2
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert [r.getMessage() for r in warnings] == [f"heartbeat ping failed: {error.__name__}"] * 2
     assert all(r.exc_info is None for r in warnings)
@@ -100,7 +100,7 @@ def test_transient_ping_error_retries_then_stops(monkeypatch):
     )
 
     assert job.main([]) == 0
-    assert requests.get.call_args_list == [call(PING_URL, timeout=5)] * 2
+    assert requests.get.call_args_list == [call(PING_URL, timeout=(5, 5))] * 2
 
 
 def test_http_error_is_logged_without_its_url(monkeypatch, caplog):

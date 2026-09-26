@@ -31,7 +31,9 @@ def _ping_heartbeat(*, failed: bool) -> None:
     try:
         for _ in range(HEARTBEAT_ATTEMPTS):
             try:
-                requests.get(url, timeout=HEARTBEAT_TIMEOUT).raise_for_status()
+                requests.get(
+                    url, timeout=(HEARTBEAT_TIMEOUT, HEARTBEAT_TIMEOUT)
+                ).raise_for_status()
                 return
             except Exception as exc:  # noqa: BLE001 -- a ping must never abort the crawl
                 # Exception messages and tracebacks can contain the URL too.

@@ -32,19 +32,20 @@ its ping URL in `.env`.
    - If the process crashes before pinging, nothing is sent -- the missing
      ping *is* the alert. Do not add a `finally:` success ping.
 3. **The ping can never hurt the crawl** (invariant 2): at most 2 attempts,
-   `timeout=5` seconds each, via plain `requests.get`. Any exception is caught
-   and logged at WARNING as `heartbeat ping failed: <ExceptionClassName>` --
+   `timeout=(5, 5)` seconds for connect and read, via plain `requests.get`.
+   Any exception is caught and logged at WARNING as
+   `heartbeat ping failed: <ExceptionClassName>` --
    **never log the URL** (anyone holding it can forge pings). The return code
    of `main()` is exactly what it would have been without the heartbeat.
    The ping runs after the DB writes, i.e. after `crawl_all()` returns.
-4. **The cycle must still fit.** A heartbeat adds up to ~10s to a cycle whose
+4. **The cycle must still fit.** A heartbeat adds up to ~20s to a cycle whose
    worst case is 534s, and `ops/systemd/parallax-crawl.service` has
    `TimeoutStartSec=9min` (540s) -- a hung cycle plus a hung ping would now be
    killed mid-ping. Raise it to `TimeoutStartSec=570` (still under the 600s
    slot) and update that file's comment. Then extend
    `tests/test_crawl_health.py::test_worst_case_crawl_cycle_fits_the_launchd_interval`
-   so it adds the heartbeat's maximum (attempts x timeout, read from the code's
-   constants, not hard-coded in the test) and asserts
+   so it adds the heartbeat's maximum (attempts x 2 x timeout, counting connect
+   and read separately and reading the code's constants) and asserts
    `worst_case + heartbeat < TimeoutStartSec < interval`, parsing
    `TimeoutStartSec` from the unit file the way it already parses the plist.
 5. `ops/env.example` documents the variable, with the healthchecks.io
@@ -89,11 +90,12 @@ uv run pytest -q tests/test_heartbeat.py tests/test_crawl_health.py && uv run ru
 
 ## Completion
 
-- Added the optional full-run heartbeat with two 5-second attempts, failure
-  pings, unchanged crawl exit codes, and URL-safe logging (including verbose
-  transport logs).
+- Added the optional full-run heartbeat with two attempts, each with separate
+  5-second connect and read timeouts, failure pings, unchanged crawl exit codes,
+  and URL-safe logging (including verbose transport logs).
 - Documented the crawl-host setting and raised the service timeout to 570s.
-- Verify passed: 30 heartbeat/crawl-health tests, Ruff clean, full suite
-  439 passed and 1 skipped (3 third-party jieba warnings).
-- Confirmed the timing regression rejects `9min` (544s exceeds 540s) and
+- Review-fix Verify passed: 30 heartbeat/crawl-health tests, Ruff clean, full
+  suite 402 passed and 38 skipped. Used a temporary `UV_CACHE_DIR` because the
+  sandbox blocks the default uv cache.
+- Confirmed the timing regression rejects `9min` (554s exceeds 540s) and
   passes at 570s, substituting the old timeout in memory only.

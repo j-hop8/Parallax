@@ -387,7 +387,8 @@ def test_worst_case_crawl_cycle_fits_the_launchd_interval():
     match = re.search(r"^TimeoutStartSec=(\d+)(s|min)?\s*$", unit.read_text(), re.MULTILINE)
     assert match, "TimeoutStartSec not found in the systemd unit"
     service_timeout = int(match.group(1)) * (60 if match.group(2) == "min" else 1)
-    heartbeat = HEARTBEAT_ATTEMPTS * HEARTBEAT_TIMEOUT
+    # Each heartbeat attempt has separate connect and read timeouts.
+    heartbeat = HEARTBEAT_ATTEMPTS * 2 * HEARTBEAT_TIMEOUT
 
     assert total + heartbeat < service_timeout < interval, (
         f"a fully hung crawl takes {total:.0f}s plus {heartbeat}s for the heartbeat "

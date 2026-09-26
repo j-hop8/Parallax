@@ -5,7 +5,7 @@
 # Type=oneshot means a run that is still going when the timer fires again is
 # simply not started twice -- the plist's AbandonProcessGroup=false, for free.
 # TimeoutStartSec is a backstop, not a budget: the per-outlet budget in
-# outlets.yaml keeps a worst-case crawl (534s) plus heartbeat (10s) under the
+# outlets.yaml keeps a worst-case crawl (534s) plus heartbeat (20s) under the
 # 10-minute interval (tests/test_crawl_health.py proves it). 570s sits above
 # that combined worst case and below the interval, so a run hung past anything
 # the budget allows is killed before the next slot instead of swallowing it.
