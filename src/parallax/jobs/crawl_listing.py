@@ -4,10 +4,40 @@ import argparse
 import logging
 import sys
 
+import requests
+
+from .. import settings
 from ..crawl.http import wait_for_network
 from ..crawl.listing import crawl_all, crawl_dry_run
 
 log = logging.getLogger(__name__)
+
+HEARTBEAT_ATTEMPTS = 2
+HEARTBEAT_TIMEOUT = 5
+
+
+def _ping_heartbeat(*, failed: bool) -> None:
+    url = settings.HEARTBEAT_URL
+    if not url:
+        return
+    if failed:
+        url = url.rstrip("/") + "/fail"
+
+    # urllib3's verbose request logs include the secret ping path. Suppress
+    # those only during the ping, then restore the crawl's logging policy.
+    transport_log = logging.getLogger("urllib3.connectionpool")
+    was_disabled = transport_log.disabled
+    transport_log.disabled = True
+    try:
+        for _ in range(HEARTBEAT_ATTEMPTS):
+            try:
+                requests.get(url, timeout=HEARTBEAT_TIMEOUT).raise_for_status()
+                return
+            except Exception as exc:  # noqa: BLE001 -- a ping must never abort the crawl
+                # Exception messages and tracebacks can contain the URL too.
+                log.warning("heartbeat ping failed: %s", type(exc).__name__)
+    finally:
+        transport_log.disabled = was_disabled
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -69,6 +99,9 @@ def main(argv: list[str] | None = None) -> int:
         # 10-minute window -- but it is the signature of a broken selector, so
         # it gets said out loud rather than buried in the counts.
         log.warning("returned zero items: %s", ", ".join(empty))
+
+    if args.outlet is None:
+        _ping_heartbeat(failed=bool(failed))
 
     # Non-zero exit so cron mail / log greps surface a persistent breakage.
     return 1 if failed else 0

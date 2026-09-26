@@ -336,14 +336,15 @@ def test_budget_does_not_engage_on_a_healthy_outlet():
 
 def test_worst_case_crawl_cycle_fits_the_launchd_interval():
     """Even if every host accepts connections and then hangs, one cycle must
-    finish before launchd fires the next.
+    finish its heartbeat before systemd's timeout and the next launchd slot.
 
     The per-outlet budget is checked between requests, not inside one, so it is
     soft by a single request's worst case (attempts x timeout plus backoff).
     Pattern and TVBS adapters issue exactly one request, so that single-request
     cost IS their worst case, budget or not. This does the arithmetic from the
-    shipped config, the Fetcher's retry defaults and the plist template, so
-    raising budget_seconds, timeout_seconds or the feed count past the point
+    shipped config, the Fetcher's retry defaults, the heartbeat constants and
+    both scheduler templates, so raising budget_seconds, timeout_seconds or
+    the feed count past the point
     where a hung cycle overlaps the next one fails here rather than in
     production, where the cost is tier-1 data that cannot be re-fetched.
     """
@@ -353,6 +354,7 @@ def test_worst_case_crawl_cycle_fits_the_launchd_interval():
 
     from parallax.config import load_outlets
     from parallax.crawl.http import Fetcher, wait_for_network
+    from parallax.jobs.crawl_listing import HEARTBEAT_ATTEMPTS, HEARTBEAT_TIMEOUT
 
     defaults, outlets = load_outlets()
     get_params = inspect.signature(Fetcher.get).parameters
@@ -381,7 +383,14 @@ def test_worst_case_crawl_cycle_fits_the_launchd_interval():
     assert match, "StartInterval not found in the plist template"
     interval = int(match.group(1))
 
-    assert total < interval, (
-        f"a fully hung cycle takes {total:.0f}s against a {interval}s interval; "
-        "lower budget_seconds or timeout_seconds, or the feed count"
+    unit = plist.parent / "systemd" / "parallax-crawl.service"
+    match = re.search(r"^TimeoutStartSec=(\d+)(s|min)?\s*$", unit.read_text(), re.MULTILINE)
+    assert match, "TimeoutStartSec not found in the systemd unit"
+    service_timeout = int(match.group(1)) * (60 if match.group(2) == "min" else 1)
+    heartbeat = HEARTBEAT_ATTEMPTS * HEARTBEAT_TIMEOUT
+
+    assert total + heartbeat < service_timeout < interval, (
+        f"a fully hung crawl takes {total:.0f}s plus {heartbeat}s for the heartbeat "
+        f"against a {service_timeout}s service timeout and a {interval}s interval; "
+        "lower crawl/heartbeat budgets or adjust TimeoutStartSec within the interval"
     )
