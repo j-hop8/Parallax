@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Daily off-host copy of the VM's database dumps (T-032), 04:00 Taipei local -
+  an hour after the VM's own 03:00 dump (parallax-backup.timer).
+
+  Tier-1 rows cannot be re-fetched (invariant 1), and an Oracle Always Free VM
+  can be reclaimed or lost with its disk, so the dumps must not live only
+  there. This Mac pulls them with `make backup.pull`, which reads
+  PARALLAX_BACKUP_HOST from .env and fails loudly (see logs/backup-pull.log)
+  when the newest dump is stale.
+
+  Installed by `make backup.pull.install`, never by sched.install: after the
+  cutover this Mac no longer crawls, but it still keeps the backups.
+  StartCalendarInterval fires on the next wake if 04:00 passed while asleep.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.parallax.backup-pull</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>cd @@ROOT@@ &amp;&amp; /usr/bin/make --no-print-directory backup.pull</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>4</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>@@ROOT@@/logs/backup-pull.log</string>
+    <key>StandardErrorPath</key>
+    <string>@@ROOT@@/logs/backup-pull.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>@@ROOT@@</string>
+</dict>
+</plist>
