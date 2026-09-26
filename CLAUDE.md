@@ -15,8 +15,9 @@ page and report hide it unless `PARALLAX_SOCIAL=1`, and its tickets live in
    window where the crawl is down is permanently unrecoverable — no backfill
    exists. Check `make health` before assuming things are fine. The public
    demo page shares that host (T-029, `ops/README.md` §10) only as a capped
-   unit reading through the read-only `parallax_ro` role. Anything that
-   writes belongs in tier 2 on the laptop, never in the page.
+   unit reading through the read-only `parallax_ro` role, under a transient
+   user of its own that cannot read `.env` or reach the Docker socket (T-034). Anything that writes belongs in
+   tier 2 on the laptop, never in the page.
 
 2. **One outlet failing must not abort the crawl.** Every adapter runs isolated
    and records to `crawl_runs` either way — including the database writes, not

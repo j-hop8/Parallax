@@ -363,16 +363,17 @@ demo.install: db.migrate
 	@test "$$(uname -s)" = Linux || { echo "demo.install is Linux-only (systemd + Caddy)" >&2; exit 1; }
 	@HOST=$$(sed -n 's/^PARALLAX_PUBLIC_HOST=//p' .env 2>/dev/null | tr -d "\"' "); \
 	test -n "$$HOST" || { echo "set PARALLAX_PUBLIC_HOST in .env, e.g. 203-0-113-5.sslip.io" >&2; exit 1; }; \
-	UV=$$(command -v uv); \
-	test -n "$$UV" || { echo "uv not found on PATH -- refusing to install a unit that cannot run" >&2; exit 1; }; \
+	.venv/bin/python -c "import streamlit" 2>/dev/null \
+		|| { echo "no streamlit in .venv -- run make setup.demo first" >&2; exit 1; }; \
 	command -v caddy >/dev/null || { echo "caddy not installed -- see ops/README.md §10" >&2; exit 1; }; \
 	PORT=$$($(DC) port db 5432 | head -1 | sed 's/.*://'); \
 	test -n "$$PORT" || { echo "cannot resolve the published Postgres port (make db.up?)" >&2; exit 1; }; \
+	chmod 600 .env || exit 1; \
 	PW=$$(openssl rand -hex 24); \
 	printf "ALTER ROLE parallax_ro PASSWORD '%s';\n" "$$PW" | $(PSQL) -v ON_ERROR_STOP=1 -q || exit 1; \
 	( umask 077; printf 'PARALLAX_DATABASE_URL=postgresql://parallax_ro:%s@127.0.0.1:%s/parallax\n' \
 		"$$PW" "$$PORT" > .env.ui ) || exit 1; \
-	sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" -e "s#@@USER@@#$$(id -un)#g" \
+	sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@GROUP@@#$$(id -gn)#g" \
 		ops/demo/$(DEMO_UNIT) | sudo tee $(SYSTEMD_DIR)/$(DEMO_UNIT) >/dev/null || exit 1; \
 	sed -e "s#@@HOST@@#$$HOST#g" ops/demo/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null || exit 1; \
 	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile || exit 1; \
@@ -486,7 +487,7 @@ ops.check:
 	@rm -rf $(OPS_CHECK) && mkdir -p $(OPS_CHECK)/units
 	@for u in $(addprefix ops/systemd/,$(SYSTEMD_UNITS)) ops/demo/$(DEMO_UNIT); do \
 		sed -e "s#@@ROOT@@#/srv/parallax#g" -e "s#@@UV@@#/usr/local/bin/uv#g" -e "s#@@USER@@#parallax#g" \
-			$$u > $(OPS_CHECK)/units/$$(basename $$u); \
+			-e "s#@@GROUP@@#parallax#g" $$u > $(OPS_CHECK)/units/$$(basename $$u); \
 	done
 	@sed -e "s#@@HOST@@#203-0-113-5.sslip.io#g" ops/demo/Caddyfile > $(OPS_CHECK)/Caddyfile
 	@echo "-- systemd-analyze verify (ubuntu:24.04)"
@@ -495,6 +496,7 @@ ops.check:
 		apt-get update -qq >/dev/null && apt-get install -y -qq systemd make >/dev/null; \
 		useradd -r parallax; mkdir -p /srv/parallax/backups; \
 		install -m755 /dev/null /usr/local/bin/uv; \
+		mkdir -p /srv/parallax/.venv/bin && install -m755 /dev/null /srv/parallax/.venv/bin/python; \
 		cp /units/* /etc/systemd/system/; \
 		systemd-analyze verify /etc/systemd/system/parallax-*.service /etc/systemd/system/parallax-*.timer; \
 		echo "$$(ls /units | wc -l) units verified (verify prints nothing when clean)"; \
