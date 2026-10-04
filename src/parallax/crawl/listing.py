@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 
 from .. import db
 from ..config import UnverifiedOutletError, load_outlets
@@ -12,19 +13,21 @@ from .http import Fetcher
 log = logging.getLogger(__name__)
 
 
-def crawl_dry_run(only: str | None = None) -> list[CrawlResult]:
+def crawl_dry_run(only: str | Collection[str] | None = None) -> list[CrawlResult]:
     """Fetch every adapter and report counts without touching the database.
 
     Exists so adapters can be developed and verified before Postgres is
     reachable -- and afterwards, to test a new selector without writing rows.
     """
     defaults, outlets = load_outlets()
+    if isinstance(only, str):
+        only = (only,)
     _check_explicit_target(outlets, only)
     fetcher = _build_fetcher(defaults)
 
     results: list[CrawlResult] = []
     for cfg in outlets:
-        if only and cfg.code != only:
+        if only is not None and cfg.code not in only:
             continue
         result = CrawlResult(outlet=cfg.code)
         if not cfg.verified:
@@ -50,25 +53,30 @@ def crawl_dry_run(only: str | None = None) -> list[CrawlResult]:
     return results
 
 
-def _check_explicit_target(outlets: list[OutletConfig], only: str | None) -> None:
+def _check_explicit_target(outlets: list[OutletConfig], only: str | Collection[str] | None) -> None:
     """Fail loudly when an operator names an outlet that has no working adapter.
 
     The bulk crawl deliberately skips unverified outlets rather than aborting --
     blocking seven healthy outlets over one broken adapter would lose tier-1 data
     that cannot be recovered. But asking for one *by name* is a different act: a
     silent skip there looks exactly like a successful crawl of an outlet that is
-    in fact uncollected, so it raises instead.
+    in fact uncollected, so it raises instead. Validate every named code before
+    starting any work.
     """
     if not only:
         return
-    target = next((o for o in outlets if o.code == only), None)
-    if target is None:
-        raise ValueError(f"unknown outlet {only!r}; check config/outlets.yaml")
-    if not target.verified:
-        raise UnverifiedOutletError(
-            f"{only}: not verified -- no working adapter. Run scripts/audit_feeds.py, "
-            f"record the resolved parser/pattern in config/outlets.yaml, and set verified: true."
-        )
+    if isinstance(only, str):
+        only = (only,)
+    by_code = {outlet.code: outlet for outlet in outlets}
+    for code in only:
+        target = by_code.get(code)
+        if target is None:
+            raise ValueError(f"unknown outlet {code!r}; check config/outlets.yaml")
+        if not target.verified:
+            raise UnverifiedOutletError(
+                f"{code}: not verified -- no working adapter. Run scripts/audit_feeds.py, "
+                f"record the resolved parser/pattern in config/outlets.yaml, and set verified: true."
+            )
 
 
 def _build_fetcher(defaults: dict) -> Fetcher:
@@ -79,7 +87,7 @@ def _build_fetcher(defaults: dict) -> Fetcher:
     )
 
 
-def crawl_all(only: str | None = None) -> list[CrawlResult]:
+def crawl_all(only: str | Collection[str] | None = None) -> list[CrawlResult]:
     """Run the tier-1 listing crawl across every configured outlet.
 
     One outlet failing must never abort the run: a markup change at one site
@@ -88,6 +96,8 @@ def crawl_all(only: str | None = None) -> list[CrawlResult]:
     isolated, recorded, and committed independently.
     """
     defaults, outlets = load_outlets()
+    if isinstance(only, str):
+        only = (only,)
     _check_explicit_target(outlets, only)
     fetcher = _build_fetcher(defaults)
 
@@ -97,7 +107,7 @@ def crawl_all(only: str | None = None) -> list[CrawlResult]:
         conn.commit()
 
         for cfg in outlets:
-            if only and cfg.code != only:
+            if only is not None and cfg.code not in only:
                 continue
 
             if not cfg.verified:
