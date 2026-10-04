@@ -20,9 +20,13 @@ demo URL is derived from it.
 ## 0. Before you start -- the one irreversible moment
 
 There is a window between **stopping the laptop crawl** (step 5) and the
-**VPS crawl's first confirmed run** (step 7). Anything published in that
-window is lost. Keep it short: do steps 1–4 with the laptop crawl still
-running, and only stop it once the VPS is one command away.
+**VPS crawl's first confirmed run** (step 7) -- and, in the split setup
+(§12), until the **Mac's first crawl into the VPS database** (step 8) for
+chinatimes and ftv. Feeds still hold what was published inside it at the next
+crawl, but udn turns its feed over in 13.6 min (T-022): keep §5 → §8 under
+**10 minutes**. Do steps 1–4 with the laptop crawl still running, have the
+Mac's new `.env` (§8) written beforehand, and only stop the crawl once the
+VPS is one command away.
 
 ## Oracle Cloud Always Free -- read this first if that is the host
 
@@ -111,8 +115,10 @@ openssl rand -hex 24     # paste as PARALLAX_DB_PASSWORD and into PARALLAX_DATAB
 nano .env
 ```
 
-`.env` needs only the two database lines; the Gemini key stays on the laptop
-(tier 2 does not run here).
+`.env` needs the two database lines; the Gemini key stays on the laptop
+(tier 2 does not run here). In the split setup (§12) add
+`PARALLAX_CRAWL_EXCLUDE=chinatimes,ftv` -- they refuse datacenter IPs and the
+Mac crawls them -- and this host's own `PARALLAX_HEARTBEAT_URL`.
 
 ## 3. Database and dependencies
 
@@ -128,7 +134,9 @@ counts and no tracebacks. Run every outlet, not one: some sites treat
 datacenter address ranges differently from a home connection, and the time
 to find out is before the laptop crawl stops. If `items_seen` is 0 for every
 feed, check outbound DNS/HTTPS; if it is 0 for one outlet only, that outlet
-is refusing this host -- stop and decide before going on.
+is refusing this host -- stop and decide before going on. (On the Oracle
+VM, chinatimes and ftv answer 403 with a Cloudflare challenge: that is what
+§12's split exists for. With `PARALLAX_CRAWL_EXCLUDE` set, expect six lines.)
 
 ## 4. Rehearse the restore (still nothing stopped on the laptop)
 
@@ -191,14 +199,28 @@ host it shows the runs made from the laptop, as of the last restore.
 
 ## 8. Point the laptop at the VPS
 
+The tunnel is a launchd agent that restarts itself (§12), not a terminal you
+keep open. Prepare the laptop's `.env` before §5, so this step is three
+commands:
+
 ```bash
-make db.down                                    # frees 5433 locally
-ssh -N -L 5433:127.0.0.1:5433 parallax@<vps>    # keep this terminal open (or autossh)
+# laptop .env -- PARALLAX_DATABASE_URL with the VPS password, host unchanged
+PARALLAX_DATABASE_URL=postgresql://parallax:<vps-password>@127.0.0.1:5433/parallax
+PARALLAX_VM_HOST=parallax@<vps-ip>
+# split setup (§12) only:
+PARALLAX_CRAWL_OUTLETS=chinatimes,ftv
+PARALLAX_HEARTBEAT_URL=https://hc-ping.com/<the Mac's own check>
 ```
 
-Laptop `.env` needs `PARALLAX_DATABASE_URL` with the VPS password (host
-stays `127.0.0.1:5433`). Everything that goes through psycopg works
-unchanged over the tunnel:
+```bash
+make db.down                                    # frees 5433 locally; the volume is kept
+make tunnel.install                             # 127.0.0.1:5433 -> the VPS, kept alive by launchd
+make sched.install SCHED_JOBS=crawl             # split setup: crawl only -- the VPS runs the rollup
+launchctl kickstart -k gui/$(id -u)/com.parallax.crawl   # first run now, not in 10 minutes
+```
+
+Without the split (all eight outlets on the VPS) skip the last two lines.
+Everything that goes through psycopg works unchanged over the tunnel:
 
 ```bash
 make report KEYWORD=沈伯洋
@@ -289,7 +311,7 @@ be re-fetched. So the workstation (this Mac) pulls every dump daily at
 
 ```bash
 # workstation .env
-PARALLAX_BACKUP_HOST=parallax@<vps-ip>
+PARALLAX_VM_HOST=parallax@<vps-ip>      # already set in §8; PARALLAX_BACKUP_HOST also works
 
 make backup.pull               # once by hand: proves ssh + rsync work non-interactively
 make backup.pull.install       # then daily via launchd -> logs/backup-pull.log
@@ -300,6 +322,45 @@ line in the log -- when the newest dump is over 36 hours old: the VM's backup
 timer, or the VM, has stopped. `sched.uninstall` (§5) leaves it alone; remove
 it with `make backup.pull.uninstall`. Rehearse a restore from it with §4's
 throwaway `pxdrill` project now and then.
+
+## 12. Split crawl: the Mac crawls chinatimes and ftv
+
+Measured 2026-10-04 from the Oracle VM: the same crawler with the same honest
+User-Agent gets **403 and a Cloudflare bot challenge** from chinatimes (the
+listing page *and* the sitemaps its robots.txt advertises) and ftv (the
+listing page; it publishes no sitemap or feed). The other six outlets work.
+From the Mac mini's Taiwanese home connection all eight work. Routing around
+a bot challenge -- proxies, browser impersonation, solving it -- is outside
+this project's crawling conduct, and the two are the poles of the stance
+spectrum, so they cannot be dropped. Hence:
+
+| Host | Crawls | Also runs | `.env` |
+|---|---|---|---|
+| VPS (Oracle, Tokyo) | cna, ltn, ettoday, udn, setn, tvbs | Postgres, rollup, daily dump, demo page | `PARALLAX_CRAWL_EXCLUDE=chinatimes,ftv`, heartbeat check A |
+| Mac mini (home) | chinatimes, ftv -> the VPS database via the tunnel | tier 2, backup pull | `PARALLAX_CRAWL_OUTLETS=chinatimes,ftv`, heartbeat check B |
+
+**Two heartbeat checks**, one per host, so each proves its own crawl. A dead
+tunnel shows up as the Mac's runs failing to record, which pings `/fail` on
+check B immediately.
+
+**The Mac mini is a valid host where the laptop was not** (CLAUDE.md 1a): it
+never sleeps (`pmset`: `sleep 0`) and restarts itself after a power cut
+(`autorestart 1`). Its one gap is FileVault: after any restart nothing runs
+until someone logs in. So:
+
+- System Settings → General → Software Update → Automatic Updates: leave
+  *Download* on, turn **off** *Install macOS updates* -- install them when
+  you are there to log in afterwards.
+- After a power cut, log in. Check B emails you within ~40 minutes if you
+  don't.
+
+**Checking the split:** `make health` on the VPS lists all eight outlets --
+chinatimes and ftv from the Mac, the rest from the VPS. Each crawl log names
+its share: `journalctl -u parallax-crawl -n 5` on the VPS, `logs/crawl.log` on
+the Mac (`crawling 2 of 8 verified outlets on this host ...`).
+
+If chinatimes or ftv ever stop challenging datacenter traffic, end the split:
+on the Mac `make sched.uninstall`, on the VPS remove `PARALLAX_CRAWL_EXCLUDE`.
 
 ## Operating
 
