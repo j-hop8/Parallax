@@ -41,6 +41,8 @@ help:
 	@echo "oci.firewall  Oracle VM only: open 80/443 in the image's own iptables rules"
 	@echo "backup.pull  copy the VM's dumps here, HOST=parallax@<ip> or PARALLAX_BACKUP_HOST in .env"
 	@echo "backup.pull.install  pull daily at 04:00 via launchd (macOS); independent of sched.install"
+	@echo "tunnel.install  Mac: keep an ssh tunnel to the VM's Postgres on 127.0.0.1:5433 (launchd)"
+	@echo "sched.install SCHED_JOBS=crawl  Mac in the split setup: crawl only, the VM runs the rollup"
 
 # The full workstation: crawl, classify (llm) and the Streamlit page (ui).
 # `nlp` is deliberately NOT here -- it drags in torch, and nothing in the
@@ -81,8 +83,13 @@ db.down:
 .PHONY: db.wait
 db.wait:
 	@echo "waiting for postgres..."
+	@# Over TCP, not the Unix socket: on an empty volume the image first runs a
+	@# temporary socket-only server for initdb, answers pg_isready, then shuts it
+	@# down -- a socket check let db.migrate hit "the database system is shutting
+	@# down" on the VM's first boot (2026-10-04). The init server never listens
+	@# on TCP, so this only succeeds against the real one.
 	@for i in $$(seq 1 30); do \
-		$(DC) exec -T db pg_isready -U parallax -d parallax >/dev/null 2>&1 && echo "ready" && exit 0; \
+		$(DC) exec -T db pg_isready -h 127.0.0.1 -U parallax -d parallax >/dev/null 2>&1 && echo "ready" && exit 0; \
 		sleep 2; \
 	done; echo "timed out waiting for postgres" >&2; exit 1
 
@@ -264,22 +271,39 @@ else
 endif
 
 # Install the launchd agents and remove the cron entries, so the two can never
-# double-run.
+# double-run. SCHED_JOBS picks which of them this Mac runs (T-036): in the
+# split setup the VM runs the rollup, and two rollups against one database
+# would race on outlet_daily_totals -- so the Mac installs `SCHED_JOBS=crawl`,
+# and any known job left out is unloaded, not merely skipped.
+LAUNCHD_JOBS := crawl rollup
+SCHED_JOBS ?= $(LAUNCHD_JOBS)
+
 .PHONY: sched.install.launchd
 sched.install.launchd:
 	@mkdir -p ~/Library/LaunchAgents logs
+	@for j in $(SCHED_JOBS); do \
+		case " $(LAUNCHD_JOBS) " in *" $$j "*) ;; \
+		*) echo "SCHED_JOBS: unknown job '$$j' (known: $(LAUNCHD_JOBS))" >&2; exit 1;; esac; \
+	done
 	@UV=$$(command -v uv); \
 	if [ -z "$$UV" ]; then \
 		echo "uv not found on PATH -- refusing to write a plist that cannot run" >&2; \
 		exit 1; \
 	fi; \
-	for j in crawl rollup; do \
-		sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" \
-			ops/com.parallax.$$j.plist.template > ~/Library/LaunchAgents/com.parallax.$$j.plist; \
-		plutil -lint ~/Library/LaunchAgents/com.parallax.$$j.plist >/dev/null || exit 1; \
-		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
-		launchctl load ~/Library/LaunchAgents/com.parallax.$$j.plist || exit 1; \
-		echo "loaded com.parallax.$$j"; \
+	for j in $(LAUNCHD_JOBS); do \
+		plist=~/Library/LaunchAgents/com.parallax.$$j.plist; \
+		case " $(SCHED_JOBS) " in \
+		*" $$j "*) \
+			sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@UV@@#$$UV#g" \
+				ops/com.parallax.$$j.plist.template > $$plist; \
+			plutil -lint $$plist >/dev/null || exit 1; \
+			launchctl unload $$plist 2>/dev/null || true; \
+			launchctl load $$plist || exit 1; \
+			echo "loaded com.parallax.$$j";; \
+		*) \
+			launchctl unload $$plist 2>/dev/null || true; rm -f $$plist; \
+			echo "not scheduled here: com.parallax.$$j";; \
+		esac; \
 	done
 	@# Editing the user's crontab is destructive, so: only touch it when a
 	@# parallax entry actually exists, back it up first, and never write from a
@@ -302,7 +326,7 @@ sched.install.launchd:
 
 .PHONY: sched.uninstall.launchd
 sched.uninstall.launchd:
-	@for j in crawl rollup; do \
+	@for j in $(LAUNCHD_JOBS); do \
 		launchctl unload ~/Library/LaunchAgents/com.parallax.$$j.plist 2>/dev/null || true; \
 		rm -f ~/Library/LaunchAgents/com.parallax.$$j.plist; \
 	done
@@ -437,14 +461,17 @@ db.restore: db.wait
 # old -- the VM's backup timer (or the VM) has stopped, and launchd's log
 # should say so rather than keep copying the same old file.
 BACKUP_PULL_DIR := $(BACKUP_DIR)/vm
+# The VM's ssh address, for backup.pull and the tunnel (T-036). PARALLAX_BACKUP_HOST
+# is T-032's name for it and still works.
+VM_HOST_FROM_ENV := { sed -n 's/^PARALLAX_VM_HOST=//p' .env; sed -n 's/^PARALLAX_BACKUP_HOST=//p' .env; } 2>/dev/null | head -1 | tr -d "\"' "
 BACKUP_KEEP := 30
 BACKUP_PLIST := $(HOME)/Library/LaunchAgents/com.parallax.backup-pull.plist
 
 .PHONY: backup.pull
 backup.pull:
 	@HOST="$(HOST)"; \
-	[ -n "$$HOST" ] || HOST=$$(sed -n 's/^PARALLAX_BACKUP_HOST=//p' .env 2>/dev/null | tr -d "\"' "); \
-	test -n "$$HOST" || { echo "usage: make backup.pull HOST=parallax@<vm-ip>  (or PARALLAX_BACKUP_HOST in .env)" >&2; exit 1; }; \
+	[ -n "$$HOST" ] || HOST=$$($(VM_HOST_FROM_ENV)); \
+	test -n "$$HOST" || { echo "usage: make backup.pull HOST=parallax@<vm-ip>  (or PARALLAX_VM_HOST in .env)" >&2; exit 1; }; \
 	mkdir -p $(BACKUP_PULL_DIR); \
 	rsync -a --ignore-existing -e "ssh -o BatchMode=yes -o ConnectTimeout=20" \
 		"$$HOST:parallax/$(BACKUP_DIR)/" $(BACKUP_PULL_DIR)/ || exit 1; \
@@ -472,6 +499,38 @@ backup.pull.uninstall:
 	@launchctl unload $(BACKUP_PLIST) 2>/dev/null || true
 	@rm -f $(BACKUP_PLIST)
 	@echo "backup pull removed; dumps already in $(BACKUP_PULL_DIR) are kept"
+
+# ---- the Mac's tunnel to the VM's Postgres (T-036) --------------------------
+# chinatimes + ftv challenge datacenter IPs, so this Mac crawls those two into
+# the VM's database through 127.0.0.1:5433 (and tier 2 uses the same tunnel).
+# Its own launchd agent with KeepAlive, never part of sched.install. Local
+# Postgres must be down first (it would hold 5433): make db.down.
+TUNNEL_PLIST := $(HOME)/Library/LaunchAgents/com.parallax.tunnel.plist
+
+.PHONY: tunnel.install
+tunnel.install:
+	@test "$$(uname -s)" = Darwin || { echo "tunnel.install schedules launchd (macOS)" >&2; exit 1; }
+	@HOST=$$($(VM_HOST_FROM_ENV)); \
+	test -n "$$HOST" || { echo "set PARALLAX_VM_HOST=parallax@<vm-ip> in .env" >&2; exit 1; }; \
+	ssh -o BatchMode=yes -o ConnectTimeout=15 "$$HOST" true \
+		|| { echo "ssh $$HOST failed non-interactively -- key in Keychain? (ops/README.md §12)" >&2; exit 1; }; \
+	if lsof -nP -iTCP:5433 -sTCP:LISTEN >/dev/null 2>&1 && ! launchctl list com.parallax.tunnel >/dev/null 2>&1; then \
+		echo "port 5433 is taken (local Postgres?) -- make db.down first" >&2; exit 1; \
+	fi; \
+	mkdir -p $(dir $(TUNNEL_PLIST)) logs; \
+	sed -e "s#@@ROOT@@#$(CURDIR)#g" -e "s#@@HOST@@#$$HOST#g" ops/com.parallax.tunnel.plist.template > $(TUNNEL_PLIST); \
+	plutil -lint $(TUNNEL_PLIST) >/dev/null || exit 1; \
+	launchctl unload $(TUNNEL_PLIST) 2>/dev/null || true; \
+	launchctl load $(TUNNEL_PLIST) || exit 1; \
+	for i in 1 2 3 4 5 6 7 8 9 10; do nc -z 127.0.0.1 5433 2>/dev/null && break; sleep 1; done; \
+	nc -z 127.0.0.1 5433 && echo "tunnel up: 127.0.0.1:5433 -> $$HOST" \
+		|| { echo "tunnel did not come up -- see logs/tunnel.log" >&2; exit 1; }
+
+.PHONY: tunnel.uninstall
+tunnel.uninstall:
+	@launchctl unload $(TUNNEL_PLIST) 2>/dev/null || true
+	@rm -f $(TUNNEL_PLIST)
+	@echo "tunnel removed"
 
 # ---- ops.check: verify the Linux packaging without a Linux host ----------
 # This Mac has no systemd, so the rendered units are checked by systemd's own
