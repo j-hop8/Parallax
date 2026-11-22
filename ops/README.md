@@ -340,8 +340,10 @@ spectrum, so they cannot be dropped. Hence:
 | Mac mini (home) | chinatimes, ftv -> the VPS database via the tunnel | tier 2, backup pull | `PARALLAX_CRAWL_OUTLETS=chinatimes,ftv`, heartbeat check B |
 
 **Two heartbeat checks**, one per host, so each proves its own crawl. A dead
-tunnel shows up as the Mac's runs failing to record, which pings `/fail` on
-check B immediately.
+tunnel fails the Mac's crawl at its first database connect, before any outlet
+runs, so no ping is sent at all: check B alerts on the *missing* ping after
+its period plus grace (about 40 minutes), not instantly. `logs/tunnel.log` on
+the Mac says whether the tunnel is the broken end.
 
 **The Mac mini is a valid host where the laptop was not** (CLAUDE.md 1a): it
 never sleeps (`pmset`: `sleep 0`) and restarts itself after a power cut

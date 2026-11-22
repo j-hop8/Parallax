@@ -18,6 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "Makefile"
 PLIST = ROOT / "ops" / "com.parallax.backup-pull.plist.template"
+needs_make = pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
 
 
 def test_backup_pull_runs_daily_after_the_vm_dump():
@@ -69,6 +70,76 @@ def test_unknown_sched_job_is_refused(tmp_path):
     assert r.returncode != 0 and "unknown job 'bogus'" in r.stderr
 
 
+def _sched(tmp_path, target, *extra):
+    """Run a launchd sched target against a throwaway HOME, with launchctl,
+    plutil, uv and crontab stubbed: launchctl calls are logged, nothing real
+    is loaded and the user's crontab is never read."""
+    home, stubs, work = tmp_path / "home", tmp_path / "bin", tmp_path / "work"
+    for d in (home, stubs, work):
+        d.mkdir(exist_ok=True)
+    (work / "ops").mkdir(exist_ok=True)
+    for j in ("crawl", "rollup"):
+        src = ROOT / "ops" / f"com.parallax.{j}.plist.template"
+        (work / "ops" / src.name).write_bytes(src.read_bytes())
+    log = tmp_path / "launchctl.log"
+    for name, body in {
+        "launchctl": f'echo "$*" >> "{log}"',
+        "plutil": "exit 0",
+        "uv": "exit 0",
+        "crontab": "exit 1",
+    }.items():
+        (stubs / name).write_text(f"#!/bin/sh\n{body}\n")
+        (stubs / name).chmod(0o755)
+    env = {**os.environ, "HOME": str(home), "PATH": f"{stubs}:{os.environ['PATH']}"}
+    r = subprocess.run(
+        ["make", "-f", str(MAKEFILE), "-C", str(work), "--no-print-directory", target, *extra],
+        env=env, capture_output=True, text=True, timeout=60, check=False,
+    )
+    agents = home / "Library" / "LaunchAgents"
+    calls = log.read_text().splitlines() if log.exists() else []
+    return r, agents, calls
+
+
+@needs_make
+def test_sched_jobs_crawl_installs_only_the_crawl_and_unloads_a_stale_rollup(tmp_path):
+    agents = tmp_path / "home" / "Library" / "LaunchAgents"
+    agents.mkdir(parents=True)
+    (agents / "com.parallax.rollup.plist").write_text("left from the single-host setup")
+    r, agents, calls = _sched(tmp_path, "sched.install.launchd", "SCHED_JOBS=crawl")
+    assert r.returncode == 0, r.stderr
+    assert (agents / "com.parallax.crawl.plist").exists()
+    assert not (agents / "com.parallax.rollup.plist").exists()
+    assert any(c.startswith("load ") and "com.parallax.crawl.plist" in c for c in calls)
+    assert not any(c.startswith("load ") and "rollup" in c for c in calls)
+    assert any(c.startswith("unload ") and "com.parallax.rollup.plist" in c for c in calls)
+
+
+@needs_make
+def test_default_sched_jobs_still_installs_crawl_and_rollup(tmp_path):
+    r, agents, _ = _sched(tmp_path, "sched.install.launchd")
+    assert r.returncode == 0, r.stderr
+    assert {p.name for p in agents.iterdir()} == {
+        "com.parallax.crawl.plist", "com.parallax.rollup.plist"
+    }
+
+
+@needs_make
+def test_empty_sched_jobs_is_refused_before_anything_is_unloaded(tmp_path):
+    r, _, calls = _sched(tmp_path, "sched.install.launchd", "SCHED_JOBS=")
+    assert r.returncode != 0 and "SCHED_JOBS is empty" in r.stderr
+    assert calls == []
+
+
+@needs_make
+def test_sched_uninstall_removes_whatever_is_installed(tmp_path):
+    r, agents, _ = _sched(tmp_path, "sched.install.launchd", "SCHED_JOBS=crawl")
+    assert r.returncode == 0, r.stderr
+    (agents / "com.parallax.tunnel.plist").write_text("must survive")
+    r, agents, _ = _sched(tmp_path, "sched.uninstall.launchd")
+    assert r.returncode == 0, r.stderr
+    assert {p.name for p in agents.iterdir()} == {"com.parallax.tunnel.plist"}
+
+
 def test_oci_firewall_opens_only_the_web_ports():
     rule = re.search(r"^OCI_RULE := (.+)$", MAKEFILE.read_text(), re.MULTILINE).group(1)
     assert re.search(r"--dports 80,443\b", rule)
@@ -117,9 +188,6 @@ def _dumps(remote: Path, n: int, newest_age_h: float) -> list[Path]:
     return out
 
 
-needs_make = pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
-
-
 @needs_make
 def test_pull_keeps_the_newest_thirty(tmp_path):
     remote = tmp_path / "remote"
@@ -159,6 +227,9 @@ def test_pull_without_a_host_refuses(tmp_path):
         ("PARALLAX_BACKUP_HOST=parallax@198.51.100.8\n", "parallax@198.51.100.8"),
         ("PARALLAX_BACKUP_HOST=old@x\nPARALLAX_VM_HOST=parallax@198.51.100.9\n",
          "parallax@198.51.100.9"),
+        # A blank new name must not shadow the old one.
+        ("PARALLAX_VM_HOST=\nPARALLAX_BACKUP_HOST=parallax@198.51.100.10\n",
+         "parallax@198.51.100.10"),
     ],
 )
 def test_pull_reads_the_vm_host_from_env(tmp_path, env_file, expected):

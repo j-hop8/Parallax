@@ -280,6 +280,7 @@ SCHED_JOBS ?= $(LAUNCHD_JOBS)
 
 .PHONY: sched.install.launchd
 sched.install.launchd:
+	@test -n "$(strip $(SCHED_JOBS))" || { echo "SCHED_JOBS is empty -- that would unload every job; use sched.uninstall for that" >&2; exit 1; }
 	@mkdir -p ~/Library/LaunchAgents logs
 	@for j in $(SCHED_JOBS); do \
 		case " $(LAUNCHD_JOBS) " in *" $$j "*) ;; \
@@ -463,7 +464,8 @@ db.restore: db.wait
 BACKUP_PULL_DIR := $(BACKUP_DIR)/vm
 # The VM's ssh address, for backup.pull and the tunnel (T-036). PARALLAX_BACKUP_HOST
 # is T-032's name for it and still works.
-VM_HOST_FROM_ENV := { sed -n 's/^PARALLAX_VM_HOST=//p' .env; sed -n 's/^PARALLAX_BACKUP_HOST=//p' .env; } 2>/dev/null | head -1 | tr -d "\"' "
+# A blank PARALLAX_VM_HOST= line falls through to the old name.
+VM_HOST_FROM_ENV := { sed -n 's/^PARALLAX_VM_HOST=//p' .env; sed -n 's/^PARALLAX_BACKUP_HOST=//p' .env; } 2>/dev/null | tr -d "\"' " | grep -m1 .
 BACKUP_KEEP := 30
 BACKUP_PLIST := $(HOME)/Library/LaunchAgents/com.parallax.backup-pull.plist
 
@@ -504,7 +506,9 @@ backup.pull.uninstall:
 # chinatimes + ftv challenge datacenter IPs, so this Mac crawls those two into
 # the VM's database through 127.0.0.1:5433 (and tier 2 uses the same tunnel).
 # Its own launchd agent with KeepAlive, never part of sched.install. Local
-# Postgres must be down first (it would hold 5433): make db.down.
+# Postgres must be down first (it would hold 5433): make db.down. "Up" means
+# launchd's own ssh holds the port: a leftover manual `ssh -L` would answer a
+# plain port probe while the agent's ssh dies on ExitOnForwardFailure.
 TUNNEL_PLIST := $(HOME)/Library/LaunchAgents/com.parallax.tunnel.plist
 
 .PHONY: tunnel.install
@@ -522,8 +526,12 @@ tunnel.install:
 	plutil -lint $(TUNNEL_PLIST) >/dev/null || exit 1; \
 	launchctl unload $(TUNNEL_PLIST) 2>/dev/null || true; \
 	launchctl load $(TUNNEL_PLIST) || exit 1; \
-	for i in 1 2 3 4 5 6 7 8 9 10; do nc -z 127.0.0.1 5433 2>/dev/null && break; sleep 1; done; \
-	nc -z 127.0.0.1 5433 && echo "tunnel up: 127.0.0.1:5433 -> $$HOST" \
+	for i in 1 2 3 4 5 6 7 8 9 10; do \
+		PID=$$(launchctl list com.parallax.tunnel 2>/dev/null | sed -n 's/.*"PID" = \([0-9]*\);.*/\1/p'); \
+		[ -n "$$PID" ] && lsof -nP -a -p "$$PID" -iTCP:5433 -sTCP:LISTEN >/dev/null 2>&1 && break; \
+		PID=; sleep 1; \
+	done; \
+	[ -n "$$PID" ] && echo "tunnel up: 127.0.0.1:5433 -> $$HOST (ssh pid $$PID)" \
 		|| { echo "tunnel did not come up -- see logs/tunnel.log" >&2; exit 1; }
 
 .PHONY: tunnel.uninstall
