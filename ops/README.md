@@ -190,18 +190,23 @@ sudo systemctl start parallax-crawl.service     # do not wait for the next slot
 journalctl -u parallax-crawl -n 30 --no-pager
 ```
 
-Expected: a `crawl_runs` line per outlet with `ok=True`. Then `make health`
-on the VPS. After ~40 minutes it should show **2 ok runs per outlet and a
-largest gap of ~10 min**. The window from §0 is closed.
+Expected: a `crawl_runs` line per outlet with `ok=True` -- six in the split
+setup (`crawling 6 of 8 verified outlets on this host`). Without the split
+the window from §0 closes here. **In the split setup, go straight on to §8:
+chinatimes and ftv are uncrawled until the Mac's first run** -- the 40-minute
+confirmation below comes after it, never before.
+
+Then, ~40 minutes later, `make health` on the VPS should show **2 ok runs per
+outlet -- all eight -- and a largest gap of ~10 min**.
 
 `make health` also prints a Threads block (T-018). On the token-less
 host it shows the runs made from the laptop, as of the last restore.
 
-## 8. Point the laptop at the VPS
+## 8. Point the Mac at the VPS
 
 The tunnel is a launchd agent that restarts itself (§12), not a terminal you
-keep open. Prepare the laptop's `.env` before §5, so this step is three
-commands:
+keep open. Write the Mac's `.env` before §5, so inside the §0 window this
+step is only the commands in the second block:
 
 ```bash
 # laptop .env -- PARALLAX_DATABASE_URL with the VPS password, host unchanged
@@ -220,6 +225,14 @@ launchctl kickstart -k gui/$(id -u)/com.parallax.crawl   # first run now, not in
 ```
 
 Without the split (all eight outlets on the VPS) skip the last two lines.
+In the split setup, confirm the first run before anything else:
+
+```bash
+tail -n 5 logs/crawl.log     # "crawling 2 of 8 verified outlets on this host", both ok
+```
+
+That run closes the window from §0. Now do §7's 40-minute `make health`.
+
 Everything that goes through psycopg works unchanged over the tunnel:
 
 ```bash
@@ -355,6 +368,19 @@ until someone logs in. So:
   you are there to log in afterwards.
 - After a power cut, log in. Check B emails you within ~40 minutes if you
   don't.
+
+**The cutover, per host**, in order. Both `.env` files are written before
+step 3; steps 3 to 6 are the §0 window and must take under 10 minutes.
+
+| # | Where | Commands | Runbook |
+|---|---|---|---|
+| 1 | VPS | `.env` with `PARALLAX_CRAWL_EXCLUDE=chinatimes,ftv` + heartbeat A; `make setup.crawl db.up db.migrate`; dry run shows six outlets | §2–3 |
+| 2 | Mac | `.env` for the split (§8 block): VPS password on `127.0.0.1:5433`, `PARALLAX_VM_HOST`, `PARALLAX_CRAWL_OUTLETS=chinatimes,ftv`, heartbeat B; rehearse the restore | §4, §8 |
+| 3 | Mac | `make sched.uninstall` | §5 |
+| 4 | Mac → VPS | `make db.dump`, `scp`; on the VPS `make db.restore FILE=...` | §6 |
+| 5 | VPS | `make sched.install`; `sudo systemctl start parallax-crawl.service`; six ok runs | §7 |
+| 6 | Mac | `make db.down tunnel.install`; `make sched.install SCHED_JOBS=crawl`; `launchctl kickstart -k gui/$(id -u)/com.parallax.crawl`; two ok runs | §8 |
+| 7 | VPS | ~40 min later: `make health`, all eight outlets, 2 ok runs each | §7 |
 
 **Checking the split:** `make health` on the VPS lists all eight outlets --
 chinatimes and ftv from the Mac, the rest from the VPS. Each crawl log names
