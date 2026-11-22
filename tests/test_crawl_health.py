@@ -147,19 +147,21 @@ def test_a_write_failure_for_one_outlet_does_not_stop_the_others(monkeypatch):
     assert conn.rollbacks >= 1
 
 
-def test_naming_an_unverified_outlet_raises_rather_than_skipping():
+@pytest.mark.parametrize("selection", [str, lambda code: ["cna", code], lambda code: {"cna", code}])
+def test_naming_an_unverified_outlet_raises_rather_than_skipping(selection):
     """A silent skip looks identical to a successful crawl of that outlet."""
     outlets = [_outlet("cna"), _outlet("setn", verified=False)]
 
     with pytest.raises(UnverifiedOutletError, match="setn"):
-        _check_explicit_target(outlets, "setn")
+        _check_explicit_target(outlets, selection("setn"))
 
     with pytest.raises(ValueError, match="unknown outlet"):
-        _check_explicit_target(outlets, "nosuchoutlet")
+        _check_explicit_target(outlets, selection("nosuchoutlet"))
 
     # The bulk crawl must still be allowed to run and skip it.
     _check_explicit_target(outlets, None)
-    _check_explicit_target(outlets, "cna")
+    _check_explicit_target(outlets, [])
+    _check_explicit_target(outlets, selection("cna"))
 
 
 def test_transient_network_errors_retry_but_http_errors_do_not(monkeypatch):

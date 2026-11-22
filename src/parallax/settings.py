@@ -49,6 +49,14 @@ DATABASE_URL = os.environ.get(
 # Optional dead-man's switch for the scheduled tier-1 crawl.
 HEARTBEAT_URL = os.environ.get("PARALLAX_HEARTBEAT_URL") or None
 
+# Optional host-level selection for scheduled crawls; --outlet overrides both.
+CRAWL_OUTLETS = tuple(
+    code.strip() for code in os.environ.get("PARALLAX_CRAWL_OUTLETS", "").split(",") if code.strip()
+)
+CRAWL_EXCLUDE = tuple(
+    code.strip() for code in os.environ.get("PARALLAX_CRAWL_EXCLUDE", "").split(",") if code.strip()
+)
+
 # Every day-bucket in the system is Taipei local. Bucketing by UTC would push
 # everything published after 08:00 local into the wrong day and quietly corrupt
 # the coverage-weight denominator.
