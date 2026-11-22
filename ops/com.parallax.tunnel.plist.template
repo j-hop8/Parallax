@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The Mac's permanent tunnel to the VM's Postgres (T-036).
+
+  chinatimes and ftv challenge datacenter IPs, so this Mac crawls those two
+  and writes into the VM's database through 127.0.0.1:5433; the same
+  address the code defaults to, so nothing else changes. Tier 2 (enrich,
+  stance, the UI) uses the same tunnel. KeepAlive restarts ssh within seconds
+  of any drop; ServerAlive notices a dead link in about 90 seconds and
+  ExitOnForwardFailure refuses to sit there without the forward.
+
+  Installed by `make tunnel.install`, never by sched.install. @@HOST@@ is
+  PARALLAX_VM_HOST from .env; the key comes from ~/.ssh/config (Keychain).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.parallax.tunnel</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/ssh</string>
+        <string>-N</string>
+        <string>-o</string><string>BatchMode=yes</string>
+        <string>-o</string><string>ExitOnForwardFailure=yes</string>
+        <string>-o</string><string>ServerAliveInterval=30</string>
+        <string>-o</string><string>ServerAliveCountMax=3</string>
+        <string>-L</string><string>127.0.0.1:5433:127.0.0.1:5433</string>
+        <string>@@HOST@@</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>@@ROOT@@/logs/tunnel.log</string>
+    <key>StandardErrorPath</key>
+    <string>@@ROOT@@/logs/tunnel.log</string>
+</dict>
+</plist>

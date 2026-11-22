@@ -34,6 +34,13 @@ page and report hide it unless `PARALLAX_SOCIAL=1`, and its tickets live in
    always-on host — that is the only real fix, and no amount of code substitutes
    for it. T-013 packaged it: `ops/systemd/` + `make sched.install` on Linux,
    `ops/README.md` is the cutover; `make ops.check` verifies the packaging here.
+   The host is an Oracle VM in Tokyo, **except chinatimes and ftv**: both
+   answer datacenter IPs with a Cloudflare bot challenge (measured 2026-10-04),
+   so the Mac mini crawls those two into the VM's database through a launchd
+   tunnel (`ops/README.md` §12, T-035/T-036). The Mac mini qualifies where the
+   laptop did not -- `sleep 0`, `autorestart 1` -- with one gap: after a
+   restart FileVault waits for a login, so macOS updates install only by hand.
+   Never route around the challenge (proxies, impersonation, solving it).
 
 3. **Days are `Asia/Taipei`, never UTC.** Bucketing by UTC misfiles everything
    published after 08:00 local and corrupts the denominator.
